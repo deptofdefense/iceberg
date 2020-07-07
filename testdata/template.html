@@ -1,0 +1,47 @@
+<!--
+- Work of the U.S. Department of Defense, Defense Digital Service.
+- Released as open source under the MIT License.  See LICENSE file.
+-->
+<html>
+  <head>
+    <title>{{.Directory}}</title>
+    <style>
+    table, th, td {
+      border: 1px solid black;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid black;
+      border-collapse: collapse;
+      padding: 10px;
+      font-size: 20px;
+    }
+    </style>
+  </head>
+  <body>
+  <table>
+    <tr>
+      <th>Type</th>
+      <th>Last Modified (UTC)</th>
+      <th>Size (Bytes)</th>
+      <th>Path</th>
+    </tr>
+    {{if .Up}}
+    <tr>
+      <td>Directory</td>
+      <td>--</td>
+      <td>--</td>
+      <td><a href="{{.Up}}">..</a></td>
+      </tr>
+    {{end}}
+    {{range .Files}}
+    <tr>
+      <td>{{.Type}}</td>
+      <td>{{.ModTime}}</td>
+      <td style="text-align:right;">{{.Size}}</td>
+      <td><a href="{{.Path}}">{{.Path}}</a></td>
+    </tr>
+    {{end}}
+  </table>
+  </body>
+</html>

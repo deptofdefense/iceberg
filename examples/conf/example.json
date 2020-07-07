@@ -1,0 +1,30 @@
+{
+  "statements": [
+    {
+      "id": "Default",
+      "effect": "allow",
+      "paths": ["*"],
+      "users": ["*"]
+    },
+    {
+      "id": "Allowed",
+      "effect": "deny",
+      "paths": ["/allowed", "/allowed/*"],
+      "not_users": [
+        "/C=US/O=Atlantis/OU=Atlantis Digital Service/OU=CONTRACTOR/CN=LAST.FIRST.MIDDLE.ID"
+      ]
+    },
+    {
+      "id": "Denied",
+      "effect": "deny",
+      "paths": ["/denied", "/denied/*"],
+      "users": ["*"]
+    },
+    {
+      "id": "DenyABC",
+      "effect": "deny",
+      "paths": ["*.abc"],
+      "users": ["*"]
+    }
+  ]
+}

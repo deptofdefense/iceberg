@@ -1,0 +1,119 @@
+version: "2.1"
+
+executors:
+  # `main` uses the `cimg/go:1.14` docker image.
+  main:
+    docker:
+      - image: cimg/go:1.14
+
+  # `base` uses the `cimg/base` docker image.
+  base:
+    docker:
+      - image: cimg/base:2020.07
+
+  # `macos` uses the Windows machine image.
+  macos:
+    macos:
+      xcode: 11.5.0
+      resource_class: medium
+
+  # `windows` uses the Windows machine image.
+  windows:
+    machine:
+      image: "windows-server-2019-vs2019:stable"
+      resource_class: "windows.medium"
+      shell: "powershell.exe -ExecutionPolicy Bypass"
+
+
+jobs:
+
+  # `test_go` tests the iceberg source code.
+  test_go:
+    executor: main
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: false
+      - run: make fmt
+      - run: make imports
+      - run: make test_go
+      - run: git diff --exit-code
+
+  # `test_cli` builds the iceberg executable.
+  test_cli:
+    executor: main
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: false
+      - run: make tidy
+      - run: make bin/iceberg
+      - run: make temp/ca.crt
+      - run: make temp/server.crt
+      - run: make test_cli
+
+  # `build` builds the iceberg executable.
+  build:
+    executor: main
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: false
+      - run: make tidy
+      - run: make build_release
+      - run: rm -f bin/gox
+      - store_artifacts:
+          path: bin
+          destination: /
+      - persist_to_workspace:
+          root: bin
+          paths:
+            - iceberg_darwin_amd64
+            - iceberg_linux_386
+            - iceberg_linux_amd64
+            - iceberg_windows_386.exe
+            - iceberg_windows_amd64.exe
+
+  # `verify_linux` verifys the linux build
+  verify_linux:
+    executor: base
+    steps:
+      - attach_workspace:
+          at: bin
+      - run: bin/iceberg_linux_386 --help
+      - run: bin/iceberg_linux_amd64 --help
+
+  # `verify_macos` verifys the windows build
+  verify_macos:
+    executor: macos
+    steps:
+      - attach_workspace:
+          at: bin
+      - run: bin/iceberg_darwin_amd64 --help
+
+  # `verify_windows` verifys the windows build
+  verify_windows:
+    executor: windows
+    steps:
+      - attach_workspace:
+          at: bin
+      - run: bin/iceberg_windows_386.exe --help
+      - run: bin/iceberg_windows_amd64.exe --help
+
+
+workflows:
+  version: 2
+  main:
+    jobs:
+      - test_go
+      - test_cli
+      - build
+      - verify_linux:
+          requires:
+            - build
+      - verify_macos:
+          requires:
+            - build
+      - verify_windows:
+          requires:
+            - build

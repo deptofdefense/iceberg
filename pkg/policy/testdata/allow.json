@@ -1,0 +1,14 @@
+{
+  "statements": [
+    {
+      "id": "DefaultAllow",
+      "effect": "allow",
+      "paths": [
+        "*"
+      ],
+      "users": [
+        "*"
+      ]
+    }
+  ]
+}

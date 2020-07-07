@@ -1,0 +1,10 @@
+{
+  "statements": [
+    {
+      "id": "Default",
+      "effect": "allow",
+      "paths": ["*"],
+      "users": ["*"]
+    }
+  ]
+}
