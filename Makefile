@@ -103,6 +103,15 @@ temp/server.crt:
 	mkdir -p temp
 	openssl req -x509 -nodes -days 365 -newkey rsa:2048  -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/CN=iceberglocal" -keyout temp/server.key -out temp/server.crt
 
+temp/client.csr:
+	mkdir -p temp
+	openssl genrsa -out temp/client.key 2048
+	openssl req -new -key temp/client.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/CN=username" -out temp/client.csr
+	openssl x509 -req -in temp/client.csr -CA temp/ca.crt -CAkey temp/ca.key -CAcreateserial -out temp/client.crt
+
+temp/client.p12:
+	mkdir -p temp
+	openssl pkcs12 -export -out temp/client.p12 -inkey temp/client.key -in temp/client.crt -certfile temp/ca.crt -passout pass:
 
 ## Clean
 
