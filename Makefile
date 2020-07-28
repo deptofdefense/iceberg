@@ -106,7 +106,7 @@ temp/server.crt:
 temp/client.crt: temp/ca.crt
 	mkdir -p temp
 	openssl genrsa -out temp/client.key 2048
-	openssl req -new -key temp/client.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/CN=username" -out temp/client.csr
+	openssl req -new -key temp/client.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/OU=CONTRACTOR/CN=LAST.FIRST.MIDDLE.ID" -out temp/client.csr
 	openssl x509 -req -in temp/client.csr -CA temp/ca.crt -CAkey temp/ca.key -CAcreateserial -out temp/client.crt
 
 temp/client.p12: temp/client.crt
