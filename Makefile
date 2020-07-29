@@ -109,7 +109,7 @@ temp/client.crt: temp/ca.crt
 	openssl req -new -key temp/client.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/OU=CONTRACTOR/CN=LAST.FIRST.MIDDLE.ID" -out temp/client.csr
 	openssl x509 -req -in temp/client.csr -CA temp/ca.crt -CAkey temp/ca.key -CAcreateserial -out temp/client.crt
 
-temp/client.p12: temp/client.crt
+temp/client.p12: temp/ca.crt temp/client.crt
 	mkdir -p temp
 	openssl pkcs12 -export -out temp/client.p12 -inkey temp/client.key -in temp/client.crt -certfile temp/ca.crt -passout pass:
 
