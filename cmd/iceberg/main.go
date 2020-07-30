@@ -901,8 +901,6 @@ func main() {
 
 			user := policy.ParseUser(v.GetString(flagUser))
 
-			fmt.Println(user.DistinguishedName())
-
 			ok := accessPolicyDocument.Evaluate(path, user)
 			if err != nil {
 				return fmt.Errorf("error validating policy: %w", err)
