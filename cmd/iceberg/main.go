@@ -868,7 +868,7 @@ func main() {
 	}
 
 	simulateRequestCommand := &cobra.Command{
-		Use:                   `request [--access-policy POLICY_FILE] [--access-policy-format POLICY_FORMAT] [--user USER]`,
+		Use:                   `request [--access-policy POLICY_FILE] [--access-policy-format POLICY_FORMAT] [--user USER] [--path PATH]`,
 		DisableFlagsInUseLine: true,
 		Short:                 "simulate a request",
 		SilenceErrors:         true,
