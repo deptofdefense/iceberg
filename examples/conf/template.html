@@ -40,6 +40,9 @@
       <td>{{.ModTime}}</td>
       <td style="text-align:right;">{{.Size}}</td>
       <td><a href="{{.Path}}">{{.Path}}</a></td>
+      {{if or (.Path | suffix ".mp4") (.Path | suffix ".txt") (.Path | suffix ".png") }}
+      <td><a href="{{.Path}}?download=false">View</a></td>
+      {{end}}
     </tr>
     {{end}}
   </table>

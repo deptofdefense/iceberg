@@ -354,7 +354,15 @@ func loadTemplate(p string) (*template.Template, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error loading template from file %q: %w", p, err)
 	}
-	t, err := template.New("main").Parse(string(b))
+	funcs := template.FuncMap(map[string]interface{}{
+		"prefix": func(prefix string, s string) bool {
+			return strings.HasPrefix(s, prefix)
+		},
+		"suffix": func(suffix string, s string) bool {
+			return strings.HasSuffix(s, suffix)
+		},
+	})
+	t, err := template.New("main").Funcs(funcs).Parse(string(b))
 	if err != nil {
 		return nil, fmt.Errorf("error parsing template from file %q: %w", p, err)
 	}
@@ -675,6 +683,8 @@ func main() {
 					// Get path from URL
 					p := server.TrimTrailingForwardSlash(server.CleanPath(r.URL.Path))
 
+					qs := r.URL.Query()
+
 					// If path is not clean
 					if !server.CheckPath(p) {
 						_ = logger.Log("Invalid path", merge(fields, map[string]interface{}{
@@ -791,7 +801,11 @@ func main() {
 						server.ServeFile(w, r, root, indexPath, time.Time{}, false, nil)
 						return
 					}
-					server.ServeFile(w, r, root, p, fi.ModTime(), true, nil)
+					if d, ok := qs["download"]; ok && len(d) > 0 && (d[0] == "false" || d[0] == "0") {
+						server.ServeFile(w, r, root, p, fi.ModTime(), false, nil)
+					} else {
+						server.ServeFile(w, r, root, p, fi.ModTime(), true, nil)
+					}
 				}),
 			}
 			// If dry run, then return before starting servers.

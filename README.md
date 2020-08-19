@@ -140,6 +140,12 @@ struct {
 })
 ```
 
+In addition to the default functions available, the `prefix` and `suffix` template functions are also available.  For example, the suffix function can be used to conditionally write an html element based on the file extension.
+
+```html
+{{if .Path | suffix ".mp4"}}Video{{else}}Other{{end}}
+```
+
 ## Examples
 
 Below are the example commands and files needed to run a server that, by default allows access to all files, but limits access to the `/secure` path to a limited set of users identified by their client certificate subject distinguished name.
