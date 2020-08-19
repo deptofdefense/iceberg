@@ -159,6 +159,11 @@ const (
 	flagLogPath = "log"
 	//
 	flagDryRun = "dry-run"
+	//
+	// Flags used by simulate request command
+	//
+	flagPath = "path"
+	flagUser = "user"
 )
 
 type File struct {
@@ -180,10 +185,16 @@ func initFlags(flag *pflag.FlagSet) {
 	flag.StringP(flagTemplatePath, "t", "", "path to the template file used during directory listing")
 	flag.StringP(flagLogPath, "l", "-", "path to the log output.  Defaults to stdout.")
 	flag.String(flagBehaviorNotFound, BehaviorNone, "default behavior when a file is not found.  One of: "+strings.Join(Behaviors, ","))
-	initPolicyFlags(flag)
+	initAccessPolicyFlags(flag)
 	initTimeoutFlags(flag)
 	initTLSFlags(flag)
 	flag.Bool(flagDryRun, false, "exit after checking configuration")
+}
+
+func initSimulateRequestFlags(flag *pflag.FlagSet) {
+	flag.String(flagPath, "", "path")
+	flag.StringP(flagUser, "u", "", "user")
+	initAccessPolicyFlags(flag)
 }
 
 func initTimeoutFlags(flag *pflag.FlagSet) {
@@ -200,7 +211,7 @@ func initTLSFlags(flag *pflag.FlagSet) {
 	flag.Bool(flagTLSPreferServerCipherSuites, false, "prefer server cipher suites")
 }
 
-func initPolicyFlags(flag *pflag.FlagSet) {
+func initAccessPolicyFlags(flag *pflag.FlagSet) {
 	flag.StringP(flagAccessPolicyFormat, "f", "json", "format of the policy file")
 	flag.StringP(flagAccessPolicyPath, "p", "", "path to the policy file.")
 }
@@ -293,6 +304,21 @@ func checkConfig(v *viper.Viper) error {
 	}
 	if err := checkTLSConfig(v, tls.CipherSuites()); err != nil {
 		return fmt.Errorf("error with TLS configuration: %w", err)
+	}
+	return nil
+}
+
+func checkSimulateRequestConfig(v *viper.Viper) error {
+	path := v.GetString(flagPath)
+	if len(path) == 0 {
+		return fmt.Errorf("path is missing")
+	}
+	user := v.GetString(flagUser)
+	if len(user) == 0 {
+		return fmt.Errorf("user is missing")
+	}
+	if err := checkAccessPolicyConfig(v); err != nil {
+		return err
 	}
 	return nil
 }
@@ -847,6 +873,63 @@ func main() {
 	}
 	initFlags(serveCommand.Flags())
 
+	simulateCommand := &cobra.Command{
+		Use:                   `simulate`,
+		DisableFlagsInUseLine: true,
+		Short:                 "simulate action",
+		SilenceErrors:         true,
+		SilenceUsage:          true,
+	}
+
+	simulateRequestCommand := &cobra.Command{
+		Use:                   `request [--access-policy POLICY_FILE] [--access-policy-format POLICY_FORMAT] [--user USER] [--path PATH]`,
+		DisableFlagsInUseLine: true,
+		Short:                 "simulate a request",
+		SilenceErrors:         true,
+		SilenceUsage:          true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			v, err := initViper(cmd)
+			if err != nil {
+				return fmt.Errorf("error initializing viper: %w", err)
+			}
+
+			if len(args) > 1 {
+				return cmd.Usage()
+			}
+
+			if errConfig := checkSimulateRequestConfig(v); errConfig != nil {
+				return errConfig
+			}
+
+			accessPolicyDocument, err := policy.ParseAccessPolicy(v.GetString(flagAccessPolicyPath), v.GetString(flagAccessPolicyFormat))
+			if err != nil {
+				return fmt.Errorf("error loading policy: %w", err)
+			}
+
+			err = accessPolicyDocument.Validate()
+			if err != nil {
+				return fmt.Errorf("error validating policy: %w", err)
+			}
+
+			path := v.GetString(flagPath)
+
+			user := policy.ParseUser(v.GetString(flagUser))
+
+			ok := accessPolicyDocument.Evaluate(path, user)
+
+			if ok {
+				fmt.Println("allow")
+			} else {
+				fmt.Println("deny")
+			}
+
+			return nil
+		},
+	}
+	initSimulateRequestFlags(simulateRequestCommand.Flags())
+
+	simulateCommand.AddCommand(simulateRequestCommand)
+
 	versionCommand := &cobra.Command{
 		Use:                   `version`,
 		DisableFlagsInUseLine: true,
@@ -859,7 +942,7 @@ func main() {
 		},
 	}
 
-	rootCommand.AddCommand(validateAccessPolicyCommand, defaultsCommand, serveCommand, versionCommand)
+	rootCommand.AddCommand(validateAccessPolicyCommand, defaultsCommand, serveCommand, simulateCommand, versionCommand)
 
 	if err := rootCommand.Execute(); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "iceberg: "+err.Error())
