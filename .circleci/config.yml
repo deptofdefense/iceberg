@@ -48,8 +48,10 @@ jobs:
           docker_layer_caching: false
       - run: make tidy
       - run: make bin/iceberg
+      - run: openssl rand --writerand ~/.rnd
       - run: make temp/ca.crt
       - run: make temp/server.crt
+      - run: make crl
       - run: make test_cli
 
   # `build` builds the iceberg executable.

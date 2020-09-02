@@ -8,8 +8,13 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
+	"encoding/pem"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -99,6 +104,11 @@ var (
 	}
 )
 
+var (
+	PEMCRLPrefix = []byte("-----BEGIN X509 CRL")
+	PEMCRLType   = "X509 CRL"
+)
+
 func stringSliceContains(stringSlice []string, value string) bool {
 	for _, x := range stringSlice {
 		if value == x {
@@ -137,6 +147,9 @@ const (
 	//
 	flagClientCAFormat = "client-ca-format"
 	flagClientCA       = "client-ca"
+	//
+	flagClientCRLFormat = "client-crl-format"
+	flagClientCRL       = "client-crl"
 	//
 	flagRootPath     = "root"
 	flagTemplatePath = "template"
@@ -181,6 +194,8 @@ func initFlags(flag *pflag.FlagSet) {
 	flag.String(flagServerKey, "", "path to server private key")
 	flag.String(flagClientCAFormat, "pkcs7", "format of the CA bundle for client authentication, either pkcs7 or pem")
 	flag.String(flagClientCA, "", "path to CA bundle for client authentication")
+	flag.String(flagClientCRLFormat, "der", "format of the CRL bundle for client authentication, either der, der.zip, or pem")
+	flag.String(flagClientCRL, "", "path to CRL bundle for client authentication")
 	flag.StringP(flagRootPath, "r", "", "path to the document root served")
 	flag.StringP(flagTemplatePath, "t", "", "path to the template file used during directory listing")
 	flag.StringP(flagLogPath, "l", "-", "path to the log output.  Defaults to stdout.")
@@ -250,8 +265,8 @@ func checkConfig(v *viper.Viper) error {
 	if len(serverKey) == 0 {
 		return fmt.Errorf("server key is missing")
 	}
-	serverCA := v.GetString(flagClientCA)
-	if len(serverCA) == 0 {
+	clientCA := v.GetString(flagClientCA)
+	if len(clientCA) == 0 {
 		return fmt.Errorf("client CA is missing")
 	}
 	rootPath := v.GetString(flagRootPath)
@@ -430,6 +445,60 @@ func getTLSCipherSuite(r *http.Request) string {
 	return tls.CipherSuiteName(r.TLS.CipherSuite)
 }
 
+func parseSliceOfDERCRL(data [][]byte) (map[string][]pkix.RevokedCertificate, error) {
+	m := map[string][]pkix.RevokedCertificate{}
+	for _, der := range data {
+		list, err := x509.ParseDERCRL(der)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing DER encoded CRL: %w", err)
+		}
+		m[list.TBSCertList.Issuer.String()] = list.TBSCertList.RevokedCertificates
+	}
+	return m, nil
+}
+
+func initCertificateRevocationList(p string, format string) (map[string][]pkix.RevokedCertificate, error) {
+	if len(p) == 0 {
+		return nil, nil
+	}
+	if format == "der.zip" {
+		zr, err := zip.OpenReader(p)
+		if err != nil {
+			return nil, fmt.Errorf("error reading zip file %q: %w", p, err)
+		}
+		data := make([][]byte, 0)
+		for _, f := range zr.File {
+			fr, err := f.Open()
+			if err != nil {
+				return nil, fmt.Errorf("error reading file %q in zip file %q: %w", f.Name, p, err)
+			}
+			b, err := ioutil.ReadAll(fr)
+			if err != nil {
+				return nil, fmt.Errorf("error loading CRL from file %q: %w", p, err)
+			}
+			_ = fr.Close() // close file reader
+			data = append(data, b)
+		}
+		_ = zr.Close() // close zip reader
+		return parseSliceOfDERCRL(data)
+	}
+	b, err := ioutil.ReadFile(p)
+	if err != nil {
+		return nil, fmt.Errorf("error loading CRL from file %q: %w", p, err)
+	}
+	if format == "pem" {
+		if !bytes.HasPrefix(b, PEMCRLPrefix) {
+			return nil, fmt.Errorf("error parsing CRL from file %q: CRL does not start with expected byte sequence %q", p, string(PEMCRLPrefix))
+		}
+		block, _ := pem.Decode(b)
+		if block == nil || block.Type != PEMCRLType {
+			return nil, fmt.Errorf("error parsing CRL from file %q: %w", p, err)
+		}
+		return parseSliceOfDERCRL([][]byte{block.Bytes})
+	}
+	return parseSliceOfDERCRL([][]byte{b})
+}
+
 func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x509.CertPool, minVersion string, maxVersion string, cipherSuites []uint16, tlsPreferServerCipherSuites bool) *tls.Config {
 
 	config := &tls.Config{
@@ -472,6 +541,41 @@ func initCipherSuites(cipherSuiteNamesString string, supportedCipherSuites []*tl
 		cipherSuites = append(cipherSuites, cipherSuiteID)
 	}
 	return cipherSuites, nil
+}
+
+func verifyPeerCertificates(peerCertificates []*x509.Certificate, clientCAs *x509.CertPool, crl map[string][]pkix.RevokedCertificate) ([][]*x509.Certificate, error) {
+	intermediates := x509.NewCertPool()
+	for _, c := range peerCertificates[1:] {
+		intermediates.AddCert(c)
+	}
+	verifiedChains, err := peerCertificates[0].Verify(x509.VerifyOptions{
+		Roots:         clientCAs,
+		Intermediates: intermediates,
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error verifying chains: %w", err)
+	}
+	if crl != nil {
+		for _, verifiedChain := range verifiedChains {
+			for _, c := range verifiedChain {
+				set := make([]pkix.RelativeDistinguishedNameSET, 0)
+				issuer := pkix.RDNSequence(set)
+				_, err := asn1.Unmarshal(c.RawIssuer, &issuer)
+				if err != nil {
+					return nil, fmt.Errorf("error unmarshaling raw issuer: %w", err)
+				}
+				if revokedCertificates, ok := crl[issuer.String()]; ok {
+					for _, r := range revokedCertificates {
+						if c.SerialNumber.Cmp(r.SerialNumber) == 0 {
+							return nil, fmt.Errorf("error verifying chains: certificate with serial number %s by issuer %q found in CRL", c.SerialNumber.String(), issuer.String())
+						}
+					}
+				}
+			}
+		}
+	}
+	return verifiedChains, nil
 }
 
 func main() {
@@ -642,6 +746,11 @@ func main() {
 				return fmt.Errorf("error initializing cipher suites: %w", err)
 			}
 
+			crl, err := initCertificateRevocationList(v.GetString(flagClientCRL), v.GetString(flagClientCRLFormat))
+			if err != nil {
+				return fmt.Errorf("error initializing certificate revocation list: %w", err)
+			}
+
 			tlsConfig := initTLSConfig(v, serverKeyPair, clientCAs, tlsMinVersion, tlsMaxVersion, cipherSuites, tlsPreferServerCipherSuites)
 
 			redirectNotFound := v.GetString(flagBehaviorNotFound) == BehaviorRedirect
@@ -668,15 +777,7 @@ func main() {
 						http.Error(w, "Missing client certificate", http.StatusBadRequest)
 						return
 					}
-					intermediates := x509.NewCertPool()
-					for _, c := range peerCertificates[1:] {
-						intermediates.AddCert(c)
-					}
-					verifiedChains, err := peerCertificates[0].Verify(x509.VerifyOptions{
-						Roots:         clientCAs,
-						Intermediates: intermediates,
-						KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-					})
+					verifiedChains, err := verifyPeerCertificates(peerCertificates, clientCAs, crl)
 					if err != nil {
 						_ = logger.Log("Certificate denied", merge(fields, map[string]interface{}{
 							"error":    err.Error(),

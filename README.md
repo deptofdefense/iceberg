@@ -21,29 +21,31 @@ Usage:
   iceberg serve [flags]
 
 Flags:
-  -p, --access-policy string              path to the policy file.
-  -f, --access-policy-format string       format of the policy file (default "json")
-  -a, --addr string                       address that iceberg will listen on (default ":8080")
-      --behavior-not-found string         default behavior when a file is not found.  One of: redirect,none (default "none")
-      --client-ca string                  path to CA bundle for client authentication
-      --client-ca-format string           format of the CA bundle for client authentication, either pkcs7 or pem (default "pkcs7")
-      --dry-run                           exit after checking configuration
-  -h, --help                              help for serve
-  -l, --log string                        path to the log output.  Defaults to stdout. (default "-")
-      --public-location string            the public location of the server used for redirects
-      --redirect string                   address that iceberg will listen to and redirect requests to the public location
-  -r, --root string                       path to the document root served
-      --server-cert string                path to server public cert
-      --server-key string                 path to server private key
-  -t, --template string                   path to the template file used during directory listing
-      --timeout-idle string               maximum amount of time to wait for the next request when keep-alives are enabled (default "5m")
-      --timeout-read string               maximum duration for reading the entire request (default "15m")
-      --timeout-write string              maximum duration before timing out writes of the response (default "5m")
-      --tls-cipher-suites string          list of supported cipher suites for TLS versions up to 1.2 (TLS 1.3 is not configureable)
-      --tls-curve-preferences string      curve preferences (default "X25519,CurveP256,CurveP384,CurveP521")
-      --tls-max-version string            maximum TLS version accepted for requests (default "1.3")
-      --tls-min-version string            minimum TLS version accepted for requests (default "1.0")
-      --tls-prefer-server-cipher-suites   prefer server cipher suites
+-p, --access-policy string              path to the policy file.
+-f, --access-policy-format string       format of the policy file (default "json")
+-a, --addr string                       address that iceberg will listen on (default ":8080")
+    --behavior-not-found string         default behavior when a file is not found.  One of: redirect,none (default "none")
+    --client-ca string                  path to CA bundle for client authentication
+    --client-ca-format string           format of the CA bundle for client authentication, either pkcs7 or pem (default "pkcs7")
+    --client-crl string                 path to CRL bundle for client authentication
+    --client-crl-format string          format of the CRL bundle for client authentication, either der, der.zip, or pem (default "der")
+    --dry-run                           exit after checking configuration
+-h, --help                              help for serve
+-l, --log string                        path to the log output.  Defaults to stdout. (default "-")
+    --public-location string            the public location of the server used for redirects
+    --redirect string                   address that iceberg will listen to and redirect requests to the public location
+-r, --root string                       path to the document root served
+    --server-cert string                path to server public cert
+    --server-key string                 path to server private key
+-t, --template string                   path to the template file used during directory listing
+    --timeout-idle string               maximum amount of time to wait for the next request when keep-alives are enabled (default "5m")
+    --timeout-read string               maximum duration for reading the entire request (default "15m")
+    --timeout-write string              maximum duration before timing out writes of the response (default "5m")
+    --tls-cipher-suites string          list of supported cipher suites for TLS versions up to 1.2 (TLS 1.3 is not configureable)
+    --tls-curve-preferences string      curve preferences (default "X25519,CurveP256,CurveP384,CurveP521")
+    --tls-max-version string            maximum TLS version accepted for requests (default "1.3")
+    --tls-min-version string            minimum TLS version accepted for requests (default "1.0")
+    --tls-prefer-server-cipher-suites   prefer server cipher suites
 ```
 
 ### Network Encryption
