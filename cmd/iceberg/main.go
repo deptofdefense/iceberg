@@ -457,10 +457,11 @@ func parseSliceOfDERCRL(data [][]byte) (map[string][]pkix.RevokedCertificate, er
 	return m, nil
 }
 
-func initCertificateRevocationList(p string, format string) (map[string][]pkix.RevokedCertificate, error) {
+func initCertificateRevocationLists(p string, format string) (map[string][]pkix.RevokedCertificate, error) {
 	if len(p) == 0 {
 		return nil, nil
 	}
+
 	if format == "der.zip" {
 		zr, err := zip.OpenReader(p)
 		if err != nil {
@@ -482,10 +483,12 @@ func initCertificateRevocationList(p string, format string) (map[string][]pkix.R
 		_ = zr.Close() // close zip reader
 		return parseSliceOfDERCRL(data)
 	}
+
 	b, err := ioutil.ReadFile(p)
 	if err != nil {
 		return nil, fmt.Errorf("error loading CRL from file %q: %w", p, err)
 	}
+
 	if format == "pem" {
 		if !bytes.HasPrefix(b, PEMCRLPrefix) {
 			return nil, fmt.Errorf("error parsing CRL from file %q: CRL does not start with expected byte sequence %q", p, string(PEMCRLPrefix))
@@ -496,7 +499,12 @@ func initCertificateRevocationList(p string, format string) (map[string][]pkix.R
 		}
 		return parseSliceOfDERCRL([][]byte{block.Bytes})
 	}
-	return parseSliceOfDERCRL([][]byte{b})
+
+	if format == "der" {
+		return parseSliceOfDERCRL([][]byte{b})
+	}
+
+	return nil, fmt.Errorf("error parsing CRL from file %q: unknown format %q", p, format)
 }
 
 func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x509.CertPool, minVersion string, maxVersion string, cipherSuites []uint16, tlsPreferServerCipherSuites bool) *tls.Config {
@@ -746,9 +754,9 @@ func main() {
 				return fmt.Errorf("error initializing cipher suites: %w", err)
 			}
 
-			crl, err := initCertificateRevocationList(v.GetString(flagClientCRL), v.GetString(flagClientCRLFormat))
+			crl, err := initCertificateRevocationLists(v.GetString(flagClientCRL), v.GetString(flagClientCRLFormat))
 			if err != nil {
-				return fmt.Errorf("error initializing certificate revocation list: %w", err)
+				return fmt.Errorf("error initializing certificate revocation lists: %w", err)
 			}
 
 			tlsConfig := initTLSConfig(v, serverKeyPair, clientCAs, tlsMinVersion, tlsMaxVersion, cipherSuites, tlsPreferServerCipherSuites)
