@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	IcebergVersion = "1.0.0"
+	IcebergVersion = "1.1.0"
 )
 
 const (
