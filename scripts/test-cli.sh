@@ -18,7 +18,7 @@ export temp="${DIR}/../temp"
 _testServe() {
   local accessPolicy=$1
   local expected=''
-  local output=$("${DIR}/../bin/iceberg" serve --access-policy $accessPolicy --access-policy-format json --client-ca "${temp}/ca.crt" --client-ca-format pem  --root "${testdata_local}/public" --server-cert "${temp}/server.crt" --server-key "${temp}/server.key" --template "${testdata_local}/template.html" --dry-run 2>&1)
+  local output=$("${DIR}/../bin/iceberg" serve --access-policy $accessPolicy --access-policy-format json --client-ca "${temp}/ca.crt" --client-ca-format pem  --root "${testdata_local}/public" --server-cert "${temp}/server.crt" --server-key "${temp}/server.key" --template "${testdata_local}/template.html" --client-crl temp/ca.crl.der --client-crl-format der --dry-run 2>&1)
   assertEquals "unexpected output" "${expected}" "${output}"
 }
 
