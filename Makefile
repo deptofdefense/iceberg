@@ -32,7 +32,7 @@ test_go: bin/errcheck bin/ineffassign bin/staticcheck bin/shadow ## Run Go tests
 	bash scripts/test.sh
 
 .PHONY: test_cli
-test_cli: bin/iceberg temp/ca.crt temp/server.crt ## Run CLI tests
+test_cli: bin/iceberg temp/ca.crt temp/ca.crl.der temp/server.crt ## Run CLI tests
 	bash scripts/test-cli.sh
 
 install:  ## Install iceberg CLI on current platform
@@ -108,6 +108,12 @@ temp/index.txt:
 temp/index.txt.attr:
 	echo 'unique_subject = yes' > temp/index.txt.attr
 
+temp/ca.crl.pem: temp/ca.crt temp/index.txt temp/index.txt.attr
+	openssl ca -gencrl -config examples/conf/openssl.cnf -out temp/ca.crl.pem
+
+temp/ca.crl.der: temp/ca.crl.pem
+	openssl crl -in temp/ca.crl.pem -outform DER -out temp/ca.crl.der
+
 temp/server.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
 	mkdir -p temp
 	openssl genrsa -out temp/server.key 2048
@@ -125,10 +131,9 @@ temp/client.p12: temp/ca.crt temp/client.crt
 	openssl pkcs12 -export -out temp/client.p12 -inkey temp/client.key -in temp/client.crt -certfile temp/ca.crt -passout pass:
 
 .PHONY: crl
-crl: temp/ca.crt temp/index.txt temp/index.txt.attr
+crl:
 	rm -f temp/ca.crl.pem temp/ca.crl.der
-	openssl ca -gencrl -config examples/conf/openssl.cnf -out temp/ca.crl.pem
-	openssl crl -in temp/ca.crl.pem -outform DER -out temp/ca.crl.der
+	make temp/ca.crl.der
 
 .PHONY: revoke
 revoke:
