@@ -97,7 +97,7 @@ docker_serve_example: temp/ca.crt temp/server.crt ## Serve using docker server i
 
 temp/ca.crt:
 	mkdir -p temp
-	openssl req -x509 -nodes -days 365 -newkey rsa:2048 -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/CN=icebergca" -keyout temp/ca.key -out temp/ca.crt
+	openssl req -batch -x509 -nodes -days 365 -newkey rsa:2048 -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/CN=icebergca" -keyout temp/ca.key -out temp/ca.crt
 
 temp/ca.srl:
 	echo '01' > temp/ca.srl
@@ -109,7 +109,7 @@ temp/index.txt.attr:
 	echo 'unique_subject = yes' > temp/index.txt.attr
 
 temp/ca.crl.pem: temp/ca.crt temp/index.txt temp/index.txt.attr
-	openssl ca -gencrl -config examples/conf/openssl.cnf -out temp/ca.crl.pem
+	openssl ca -batch -gencrl -config examples/conf/openssl.cnf -out temp/ca.crl.pem
 
 temp/ca.crl.der: temp/ca.crl.pem
 	openssl crl -in temp/ca.crl.pem -outform DER -out temp/ca.crl.der
@@ -118,13 +118,13 @@ temp/server.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
 	mkdir -p temp
 	openssl genrsa -out temp/server.key 2048
 	openssl req -new -key temp/server.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/CN=iceberglocal" -out temp/server.csr
-	openssl ca -config examples/conf/openssl.cnf -batch -notext -in temp/server.csr -out temp/server.crt
+	openssl ca -batch -config examples/conf/openssl.cnf -extensions server_ext -notext -in temp/server.csr -out temp/server.crt
 
 temp/client.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
 	mkdir -p temp
 	openssl genrsa -out temp/client.key 2048
 	openssl req -new -key temp/client.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/OU=CONTRACTOR/CN=LAST.FIRST.MIDDLE.ID" -out temp/client.csr
-	openssl ca -config examples/conf/openssl.cnf -notext -in temp/client.csr -out temp/client.crt
+	openssl ca -batch -config examples/conf/openssl.cnf -extensions server_ext -notext -in temp/client.csr -out temp/client.crt
 
 temp/client.p12: temp/ca.crt temp/client.crt
 	mkdir -p temp
@@ -137,7 +137,26 @@ crl:
 
 .PHONY: revoke
 revoke:
-	openssl ca -config examples/conf/openssl.cnf -cert temp/ca.crt -keyfile temp/ca.key -revoke temp/client.crt
+	openssl ca -batch -config examples/conf/openssl.cnf -cert temp/ca.crt -keyfile temp/ca.key -revoke temp/client.crt
+
+temp/ocsp.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
+	mkdir -p temp
+	openssl genrsa -out temp/ocsp.key 2048
+	openssl req -new -key temp/ocsp.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/OU=OCSP/CN=127.0.0.1:9999" -out temp/ocsp.csr
+	openssl ca -batch -config examples/conf/openssl.cnf -notext -in temp/ocsp.csr -out temp/ocsp.crt
+
+.PHONY: ocsp_responder
+ocsp_responder:
+	openssl ocsp -index temp/index.txt -port 9999 -rsigner temp/ocsp.crt -rkey temp/ocsp.key -CA temp/ca.crt -text -out temp/ocsp.log
+
+.PHONY: ocsp_validate_client
+ocsp_validate_client:
+	openssl ocsp -CAfile temp/ca.crt -issuer temp/ca.crt -cert temp/client.crt -url http://localhost:9999 -resp_text
+
+.PHONY: ocsp_revoke_client
+ocsp_revoke_client:
+	openssl ca -batch -config examples/conf/openssl.cnf -cert temp/ca.crt -keyfile temp/ca.key -revoke temp/client.crt
+
 
 ## Clean
 

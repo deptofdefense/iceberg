@@ -56,3 +56,6 @@ emailAddress_max		= 64
 challengePassword		= A challenge password
 challengePassword_min		= 4
 challengePassword_max		= 20
+
+[ server_ext ]
+authorityInfoAccess = OCSP;URI:http://127.0.0.1:9999

@@ -13,6 +13,7 @@ require (
 	github.com/spf13/viper v1.6.3
 	github.com/stretchr/testify v1.5.1
 	go.mozilla.org/pkcs7 v0.0.0-20200128120323-432b2356ecb1
+	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
 	golang.org/x/sys v0.0.0-20190412213103-97732733099d // indirect
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/tools v0.0.0-20190328211700-ab21143f2384

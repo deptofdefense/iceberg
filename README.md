@@ -267,6 +267,68 @@ so select the "OK" button immediately.
 
 Now you may browse to the website at <https://iceberglocal:8080>.
 
+## Certificate Revocation
+
+### CRL
+
+TBD
+
+### OCSP
+
+OCSP is the preferred method of managing certificate revocation. In order to work with OCSP you first need to create OCSP certificate and key pair in order to run an OCSP responder server with OpenSSL. Additionally you'll need a client key to verify.
+
+```sh
+make temp/ocsp.crt temp/client.p12
+```
+
+Verify the OCSP server information is on the client certificate with:
+
+```sh
+openssl x509 -in temp/client.crt -text -noout
+```
+
+A section that looks like this should appear:
+
+```text
+        X509v3 extensions:
+            Authority Information Access: 
+                OCSP - URI:http://127.0.0.1:9999
+```
+
+Now run the OCSP responder server in another terminal
+
+```sh
+make ocsp_responder
+```
+
+Validate the client certificate with:
+
+```sh
+make ocsp_validate_client
+```
+
+Test this with golang run:
+
+```sh
+go run ./pkg/ocsp/ocsp.go
+```
+
+See the output: "Good"
+
+Now revoke the cert:
+
+```sh
+make ocsp_revoke_client
+```
+
+And run again:
+
+```sh
+go run ./pkg/ocsp/ocsp.go
+```
+
+See the output: "Revoked"
+
 ## Contributing
 
 We'd love to have your contributions!  Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
