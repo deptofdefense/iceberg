@@ -209,6 +209,64 @@ You can install `go` on macOS using homebrew with `brew install go`.
 
 To install `direnv` on `macOS` use `brew install direnv`.  If using bash, then add `eval \"$(direnv hook bash)\"` to the `~/.bash_profile` file .  If using zsh, then add `eval \"$(direnv hook zsh)\"` to the `~/.zshrc` file.
 
+## Development
+
+To get started you will need to edit the `/etc/hosts` file on your machine to have this entry:
+
+```txt
+127.0.0.1   iceberglocal
+```
+
+To connect to the server you need a client certificate and key pair, so create that file first:
+
+```sh
+make temp/client.p12
+```
+
+To run the example included in this repository start by running the server in docker:
+
+```sh
+make docker_build docker_serve_example
+```
+
+Now connect to the server with cURL to view the `index.html` file or the contents of the `allowed/` directory:
+
+```sh
+curl --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt https://iceberglocal:8080/index.html
+curl --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt https://iceberglocal:8080/allowed/
+```
+
+To view files based on the contents of the `conf/example.json` file:
+
+```sh
+curl --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt https://iceberglocal:8080/allowed/a.txt
+curl --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt https://iceberglocal:8080/allowed/b.txt
+```
+
+Other directories and files will be explicitly denied based on the same example policy:
+
+```sh
+curl --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt https://iceberglocal:8080/allowed/123.abc
+curl --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt https://iceberglocal:8080/denied/
+curl --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt https://iceberglocal:8080/denied/a.txt
+curl --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt https://iceberglocal:8080/denied/b.txt
+curl --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt https://iceberglocal:8080/denied/123.abc
+```
+
+### Firefox
+
+You may consider using a web browser to view the files. In this case you need to load the Certificate Authority and identity file
+into the firefox Certificate Manager. Browse to "about:preferences#privacy" and search for the section labelled "Certificates".
+Use the "View Certificates" button to open the Certificate Manager.
+
+In the "Authorities" tab use the "Import..." button to load the `temp/ca.crt` file.  When asked select
+"Trust this CA to identify websites." and then continue by selecting "OK".
+
+In the "Your Certificates" tab use the "Import..." button to load the `temp/client.p12` file.  There is no password to enter
+so select the "OK" button immediately.
+
+Now you may browse to the website at <https://iceberglocal:8080>.
+
 ## Contributing
 
 We'd love to have your contributions!  Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
