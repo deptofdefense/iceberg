@@ -291,7 +291,7 @@ A section that looks like this should appear:
 
 ```text
         X509v3 extensions:
-            Authority Information Access: 
+            Authority Information Access:
                 OCSP - URI:http://127.0.0.1:9999
 ```
 
