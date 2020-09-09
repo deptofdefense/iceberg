@@ -38,7 +38,7 @@ func main() {
 	}
 
 	if len(cert.OCSPServer) == 0 {
-		panic(errors.New("No OCSP Server listed for cert"))
+		panic(errors.New("no OCSP Server listed for cert"))
 	}
 
 	ocspReq, err := ocsp.CreateRequest(cert, issuer, nil)
@@ -57,7 +57,12 @@ func main() {
 	req.Header.Set("User-Agent", "test")
 	resp, err := http.DefaultClient.Do(req)
 	if resp != nil {
-		defer resp.Body.Close()
+		defer func() {
+			errRespClose := resp.Body.Close()
+			if errRespClose != nil {
+				panic(errRespClose)
+			}
+		}()
 	}
 	if err != nil {
 		panic(err)
@@ -69,7 +74,7 @@ func main() {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		panic(errors.New(fmt.Sprintf("Bad response %d from %q: %q", resp.StatusCode, cert.OCSPServer[0], raw)))
+		panic(fmt.Errorf("bad response %d from %q: %q", resp.StatusCode, cert.OCSPServer[0], raw))
 	}
 
 	ocspResp, err := ocsp.ParseResponseForCert(raw, cert, issuer)
@@ -88,7 +93,7 @@ func main() {
 		panic(err)
 	}
 	if ocspResp == nil {
-		panic(errors.New("No OCSP Response"))
+		panic(errors.New("no OCSP Response"))
 	}
 
 	switch ocspResp.Status {
