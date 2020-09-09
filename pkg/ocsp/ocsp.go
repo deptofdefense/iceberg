@@ -69,7 +69,7 @@ func main() {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		panic(errors.New(fmt.Sprintf("Bad response %s from %q: %q", resp.StatusCode, cert.OCSPServer[0], raw)))
+		panic(errors.New(fmt.Sprintf("Bad response %d from %q: %q", resp.StatusCode, cert.OCSPServer[0], raw)))
 	}
 
 	ocspResp, err := ocsp.ParseResponseForCert(raw, cert, issuer)
