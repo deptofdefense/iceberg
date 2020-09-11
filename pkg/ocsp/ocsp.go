@@ -22,59 +22,62 @@ type OCSPRenewer struct {
 
 	Certificate, Issuer *x509.Certificate // the certificates for the OCSP Request
 	HTTPClient          *http.Client      // the http client to use
-	Staple              *ocsp.Response    // the response from the OCSP Responder
 	RefreshRatio        float64           // the percentage of time to wait between ThisUpdate and NextUpdate before renewing
 	RefreshMin          time.Duration     // the minimum time that must elapse before a new OCSP request is issued
+
+	staple *ocsp.Response // the response from the OCSP Responder
 }
 
 // GetStaple returns the OCSP Response
 func (renewer *OCSPRenewer) GetStaple() *ocsp.Response {
-	return renewer.Staple
+	renewer.Lock()
+	defer renewer.Unlock()
+	return renewer.staple
 }
 
 // ShouldRenew indicates if the OCSP Staple should be renewed
 func (renewer *OCSPRenewer) ShouldRenew() bool {
 
-	if renewer.Staple != nil {
+	if renewer.staple != nil {
 		// ThisUpdate: latest time known to have been good
 		// ProducedAt: response generated
 		// NextUpdate: expiration
 		// RevokedAt: revocation time
 		// fmt.Printf("ThisUpdate: [%s]\tProducedAt: [%s]\tNextUpdate: [%s]\tRevokedAt: [%s]\n",
-		// 	renewer.Staple.ThisUpdate,
-		// 	renewer.Staple.ProducedAt,
-		// 	renewer.Staple.NextUpdate,
-		// 	renewer.Staple.RevokedAt)
+		// 	renewer.staple.ThisUpdate,
+		// 	renewer.staple.ProducedAt,
+		// 	renewer.staple.NextUpdate,
+		// 	renewer.staple.RevokedAt)
 
 		// Do not renew if certificate has been revoked
-		if !renewer.Staple.RevokedAt.IsZero() {
+		if !renewer.staple.RevokedAt.IsZero() {
 			return false
 		}
 
 		now := time.Now()
-		if renewer.Staple.NextUpdate.IsZero() {
+		if renewer.staple.NextUpdate.IsZero() {
 			// Staple missing expiration time, should renew after a waiting period.
 			// This can happen if the OCSP responder isn't configured to provide when fresh revocation information is available.
 			// In the case that nextUpdate isn't set the assumption is a renewal can always happen anytime.
 			// Avoid overwhelming the server by waiting a while before requesting again.
-			return now.After(renewer.Staple.ThisUpdate.Add(renewer.RefreshMin))
+			return now.After(renewer.staple.ThisUpdate.Add(renewer.RefreshMin))
 		}
-		if now.After(renewer.Staple.NextUpdate) {
+		if now.After(renewer.staple.NextUpdate) {
 			// Staple expired, should renew
 			return true
 		}
-		if renewer.Staple.ProducedAt.IsZero() {
+		if renewer.staple.ProducedAt.IsZero() {
 			// Staple missing initial validity time, should renew
 			return true
 		}
 
 		// Should establish a window during which renew should start
-		minUntilRefresh := time.Duration(float64(renewer.Staple.NextUpdate.Sub(renewer.Staple.ProducedAt)) * renewer.RefreshRatio)
+		minUntilRefresh := time.Duration(float64(renewer.staple.NextUpdate.Sub(renewer.staple.ProducedAt)) * renewer.RefreshRatio)
 		// Always wait a minimum amount of time before refresh
 		if minUntilRefresh < renewer.RefreshMin {
 			minUntilRefresh = renewer.RefreshMin
 		}
-		retryTime := renewer.Staple.ProducedAt.Add(minUntilRefresh)
+		retryTime := renewer.staple.ProducedAt.Add(minUntilRefresh)
 
 		return now.After(retryTime)
 	}
@@ -94,8 +97,8 @@ func (renewer *OCSPRenewer) Renew() error {
 		return nil
 	}
 
-	if renewer.Staple != nil {
-		if renewer.Staple.Status == ocsp.Revoked {
+	if renewer.staple != nil {
+		if renewer.staple.Status == ocsp.Revoked {
 			return errors.New("certificate has been revoked")
 		}
 	}
@@ -150,7 +153,7 @@ func (renewer *OCSPRenewer) Renew() error {
 		return errors.New("no OCSP Response")
 	}
 
-	renewer.Staple = ocspResp
+	renewer.staple = ocspResp
 
 	return nil
 }
