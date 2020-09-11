@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ocsp"
@@ -17,6 +18,8 @@ import (
 
 // OCSPRenewer is the configuration for getting the Staple
 type OCSPRenewer struct {
+	sync.Mutex
+
 	Certificate, Issuer *x509.Certificate // the certificates for the OCSP Request
 	HTTPClient          *http.Client      // the http client to use
 	Staple              *ocsp.Response    // the response from the OCSP Responder
@@ -81,6 +84,10 @@ func (renewer *OCSPRenewer) ShouldRenew() bool {
 
 // Renew does the work to renew an OCSP Staple
 func (renewer *OCSPRenewer) Renew() error {
+
+	// Renew should only happen once at a time
+	renewer.Lock()
+	defer renewer.Unlock()
 
 	// Determine if now is the time to renew
 	if !renewer.ShouldRenew() {
