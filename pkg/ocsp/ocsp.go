@@ -207,7 +207,8 @@ func main() {
 				case ocsp.Good:
 					fmt.Printf("Good: %d\n", s.Status)
 				case ocsp.Revoked:
-					fmt.Printf("Revoked: %d\n", s.Status)
+					// See RFC 5280
+					fmt.Printf("Revoked: %d, Reason: %d\n", s.Status, s.RevocationReason)
 				case ocsp.Unknown:
 					fmt.Printf("Unknown: %d\n", s.Status)
 				}
