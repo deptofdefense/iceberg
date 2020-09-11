@@ -18,10 +18,10 @@ import (
 // OCSPRenewer is the configuration for getting the Staple
 type OCSPRenewer struct {
 	Certificate, Issuer *x509.Certificate // the certificates for the OCSP Request
-
-	Staple       *ocsp.Response // the response from the OCSP Responder
-	RefreshRatio float64        // the percentage of time to wait between ThisUpdate and NextUpdate before renewing
-	RefreshMin   time.Duration  // the minimum time that must elapse before a new OCSP request is issued
+	HTTPClient          *http.Client      // the http client to use
+	Staple              *ocsp.Response    // the response from the OCSP Responder
+	RefreshRatio        float64           // the percentage of time to wait between ThisUpdate and NextUpdate before renewing
+	RefreshMin          time.Duration     // the minimum time that must elapse before a new OCSP request is issued
 }
 
 // GetStaple returns the OCSP Response
@@ -107,7 +107,7 @@ func (renewer *OCSPRenewer) Renew() error {
 	}
 
 	req.Header.Set("User-Agent", "ocsp")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := renewer.HTTPClient.Do(req)
 	if resp != nil {
 		defer func() {
 			errRespClose := resp.Body.Close()
@@ -182,6 +182,7 @@ func main() {
 		renewer = &OCSPRenewer{
 			Certificate:  cert,
 			Issuer:       issuer,
+			HTTPClient:   http.DefaultClient,
 			RefreshRatio: 0.8,
 			RefreshMin:   5 * time.Minute,
 		}
