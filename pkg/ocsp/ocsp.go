@@ -168,6 +168,17 @@ func parseCert(filename string) (*x509.Certificate, error) {
 	return cert, err
 }
 
+// New returns a new OCSPRenewer
+func New(cert, issuer *x509.Certificate, httpClient *http.Client, refreshRatio float64, refreshMin time.Duration) *OCSPRenewer {
+	return &OCSPRenewer{
+		Certificate:  cert,
+		Issuer:       issuer,
+		HTTPClient:   httpClient,
+		RefreshRatio: refreshRatio,
+		RefreshMin:   refreshMin,
+	}
+}
+
 func main() {
 
 	certDir := "./temp/"
@@ -189,13 +200,8 @@ func main() {
 	var renewer *OCSPRenewer
 	if len(cert.OCSPServer) > 0 {
 
-		renewer = &OCSPRenewer{
-			Certificate:  cert,
-			Issuer:       issuer,
-			HTTPClient:   http.DefaultClient,
-			RefreshRatio: 0.8,
-			RefreshMin:   5 * time.Minute,
-		}
+		httpClient := http.Client{Timeout: 5 * time.Second}
+		renewer = New(cert, issuer, &httpClient, 0.8, 5*time.Minute)
 		go func() {
 			// The tick time should likely be half the RefreshMin
 			for ; true; <-time.Tick(10 * time.Second) {
