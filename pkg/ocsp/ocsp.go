@@ -15,9 +15,52 @@ import (
 	"golang.org/x/crypto/ocsp"
 )
 
+// DoRenew indicates if the OCSP Staple should be renewed
+func (renewer *OCSPRenewer) DoRenew() bool {
+
+	if renewer.Staple != nil {
+		// ThisUpdate: latest time known to have been good
+		// ProducedAt: response generated
+		// NextUpdate: expiration
+		// RevokedAt: revocation time
+		fmt.Printf("\nThisUpdate: %s\nProducedAt: %s\nNextUpdate: %s\nRevokedAt: %s\n",
+			renewer.Staple.ThisUpdate,
+			renewer.Staple.ProducedAt,
+			renewer.Staple.NextUpdate,
+			renewer.Staple.RevokedAt)
+		now := time.Now()
+		if renewer.Staple.NextUpdate.IsZero() {
+			// Staple missing expiration time, should renew
+			return true
+		}
+		if now.After(renewer.Staple.NextUpdate) {
+			// Staple expired, should renew
+			return true
+		}
+		if renewer.Staple.ProducedAt.IsZero() {
+			// Staple missing initial validity time, should renew
+			return true
+		}
+
+		// Should establish a window during which renew should start
+		ratio := 0.8 // A percentage, how far through the window when renew should happen
+		retryTime := renewer.Staple.ProducedAt.Add(time.Duration(float64(renewer.Staple.NextUpdate.Sub(renewer.Staple.ProducedAt)) * ratio))
+
+		return now.After(retryTime)
+	}
+
+	return true
+}
+
+// Renew does the work to renew an OCSP Staple
 func (renewer *OCSPRenewer) Renew() error {
 
-	// TODO: Need to check if renewal can wait before making a request
+	// Determine if now is the time to renew
+	if !renewer.DoRenew() {
+		fmt.Println("Do not renew")
+		return nil
+	}
+	fmt.Println("Renew!!")
 
 	ocspReq, err := ocsp.CreateRequest(renewer.Certificate, renewer.Issuer, nil)
 	if err != nil {
