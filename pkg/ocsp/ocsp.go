@@ -139,8 +139,8 @@ type OCSPRenewer struct {
 	Staple *ocsp.Response
 }
 
-func (s *OCSPRenewer) GetStaple() (*ocsp.Response, error) {
-	return s.Staple, nil
+func (renewer *OCSPRenewer) GetStaple() (*ocsp.Response, error) {
+	return renewer.Staple, nil
 }
 
 func main() {
