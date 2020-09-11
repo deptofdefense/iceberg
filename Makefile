@@ -147,11 +147,19 @@ temp/ocsp.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
 
 .PHONY: ocsp_responder
 ocsp_responder:
-	openssl ocsp -index temp/index.txt -port 9999 -rsigner temp/ocsp.crt -rkey temp/ocsp.key -CA temp/ca.crt -text -out temp/ocsp.log
+	openssl ocsp -index temp/index.txt -port 9999 -rsigner temp/ocsp.crt -rkey temp/ocsp.key -CA temp/ca.crt -text -out temp/ocsp.log -nmin 5
+
+.PHONY: ocsp_validate_server
+ocsp_validate_server:
+	openssl ocsp -CAfile temp/ca.crt -issuer temp/ca.crt -cert temp/server.crt -url http://localhost:9999 -resp_text
 
 .PHONY: ocsp_validate_client
 ocsp_validate_client:
 	openssl ocsp -CAfile temp/ca.crt -issuer temp/ca.crt -cert temp/client.crt -url http://localhost:9999 -resp_text
+
+.PHONY: ocsp_revoke_server
+ocsp_revoke_server:
+	openssl ca -batch -config examples/conf/openssl.cnf -cert temp/ca.crt -keyfile temp/ca.key -revoke temp/server.crt
 
 .PHONY: ocsp_revoke_client
 ocsp_revoke_client:

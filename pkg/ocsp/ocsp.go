@@ -15,23 +15,46 @@ import (
 	"golang.org/x/crypto/ocsp"
 )
 
-// DoRenew indicates if the OCSP Staple should be renewed
-func (renewer *OCSPRenewer) DoRenew() bool {
+// OCSPRenewer is the configuration for getting the Staple
+type OCSPRenewer struct {
+	Certificate, Issuer *x509.Certificate // the certificates for the OCSP Request
+
+	Staple       *ocsp.Response // the response from the OCSP Responder
+	RefreshRatio float64        // the percentage of time to wait between ThisUpdate and NextUpdate before renewing
+	RefreshMin   time.Duration  // the minimum time that must elapse before a new OCSP request is issued
+}
+
+// GetStaple returns the OCSP Response
+func (renewer *OCSPRenewer) GetStaple() *ocsp.Response {
+	return renewer.Staple
+}
+
+// ShouldRenew indicates if the OCSP Staple should be renewed
+func (renewer *OCSPRenewer) ShouldRenew() bool {
 
 	if renewer.Staple != nil {
 		// ThisUpdate: latest time known to have been good
 		// ProducedAt: response generated
 		// NextUpdate: expiration
 		// RevokedAt: revocation time
-		fmt.Printf("\nThisUpdate: %s\nProducedAt: %s\nNextUpdate: %s\nRevokedAt: %s\n",
-			renewer.Staple.ThisUpdate,
-			renewer.Staple.ProducedAt,
-			renewer.Staple.NextUpdate,
-			renewer.Staple.RevokedAt)
+		// fmt.Printf("ThisUpdate: [%s]\tProducedAt: [%s]\tNextUpdate: [%s]\tRevokedAt: [%s]\n",
+		// 	renewer.Staple.ThisUpdate,
+		// 	renewer.Staple.ProducedAt,
+		// 	renewer.Staple.NextUpdate,
+		// 	renewer.Staple.RevokedAt)
+
+		// Do not renew if certificate has been revoked
+		if !renewer.Staple.RevokedAt.IsZero() {
+			return false
+		}
+
 		now := time.Now()
 		if renewer.Staple.NextUpdate.IsZero() {
-			// Staple missing expiration time, should renew
-			return true
+			// Staple missing expiration time, should renew after a waiting period.
+			// This can happen if the OCSP responder isn't configured to provide when fresh revocation information is available.
+			// In the case that nextUpdate isn't set the assumption is a renewal can always happen anytime.
+			// Avoid overwhelming the server by waiting a while before requesting again.
+			return now.After(renewer.Staple.ThisUpdate.Add(renewer.RefreshMin))
 		}
 		if now.After(renewer.Staple.NextUpdate) {
 			// Staple expired, should renew
@@ -43,8 +66,12 @@ func (renewer *OCSPRenewer) DoRenew() bool {
 		}
 
 		// Should establish a window during which renew should start
-		ratio := 0.8 // A percentage, how far through the window when renew should happen
-		retryTime := renewer.Staple.ProducedAt.Add(time.Duration(float64(renewer.Staple.NextUpdate.Sub(renewer.Staple.ProducedAt)) * ratio))
+		minUntilRefresh := time.Duration(float64(renewer.Staple.NextUpdate.Sub(renewer.Staple.ProducedAt)) * renewer.RefreshRatio)
+		// Always wait a minimum amount of time before refresh
+		if minUntilRefresh < renewer.RefreshMin {
+			minUntilRefresh = renewer.RefreshMin
+		}
+		retryTime := renewer.Staple.ProducedAt.Add(minUntilRefresh)
 
 		return now.After(retryTime)
 	}
@@ -56,11 +83,15 @@ func (renewer *OCSPRenewer) DoRenew() bool {
 func (renewer *OCSPRenewer) Renew() error {
 
 	// Determine if now is the time to renew
-	if !renewer.DoRenew() {
-		fmt.Println("Do not renew")
+	if !renewer.ShouldRenew() {
 		return nil
 	}
-	fmt.Println("Renew!!")
+
+	if renewer.Staple != nil {
+		if renewer.Staple.Status == ocsp.Revoked {
+			return errors.New("certificate has been revoked")
+		}
+	}
 
 	ocspReq, err := ocsp.CreateRequest(renewer.Certificate, renewer.Issuer, nil)
 	if err != nil {
@@ -81,8 +112,7 @@ func (renewer *OCSPRenewer) Renew() error {
 		defer func() {
 			errRespClose := resp.Body.Close()
 			if errRespClose != nil {
-				fmt.Println(errRespClose)
-				os.Exit(1)
+				fmt.Printf("unable to close http body: %s", errRespClose)
 			}
 		}()
 	}
@@ -103,17 +133,12 @@ func (renewer *OCSPRenewer) Renew() error {
 	ocspResp, err := ocsp.ParseResponseForCert(raw, renewer.Certificate, renewer.Issuer)
 	if err != nil {
 		if re, ok := err.(ocsp.ResponseError); ok {
-			switch re.Status {
-			case ocsp.Success:
-				fmt.Println("Success")
-			case ocsp.TryLater:
-				fmt.Println("Try Later")
-			default:
-				// Do nothing
-			}
+			// https://tools.ietf.org/html/rfc6960#section-4.2.1
+			fmt.Printf("Response error: %s", re.Status.String())
 		}
 		return err
 	}
+
 	if ocspResp == nil {
 		return errors.New("no OCSP Response")
 	}
@@ -133,16 +158,6 @@ func parseCert(filename string) (*x509.Certificate, error) {
 	return cert, err
 }
 
-type OCSPRenewer struct {
-	Certificate, Issuer *x509.Certificate
-
-	Staple *ocsp.Response
-}
-
-func (renewer *OCSPRenewer) GetStaple() (*ocsp.Response, error) {
-	return renewer.Staple, nil
-}
-
 func main() {
 
 	certDir := "./temp/"
@@ -160,33 +175,47 @@ func main() {
 	}
 
 	// Only do OCSPRenewer if the server exists to make the request
+	// Will also want a flag that controls this which takes precedence over the value on the cert
+	var renewer *OCSPRenewer
 	if len(cert.OCSPServer) > 0 {
-		renewer := OCSPRenewer{
-			Certificate: cert,
-			Issuer:      issuer,
+
+		renewer = &OCSPRenewer{
+			Certificate:  cert,
+			Issuer:       issuer,
+			RefreshRatio: 0.8,
+			RefreshMin:   5 * time.Minute,
 		}
 		go func() {
+			// The tick time should likely be half the RefreshMin
 			for ; true; <-time.Tick(10 * time.Second) {
 				err := renewer.Renew()
+				// Record errors but don't break, this helps recover from server outages.
 				if err != nil {
 					fmt.Println(err)
 				}
 			}
 		}()
 
-		// View the OCSP Status on the cert
+	}
+
+	// Example of how to view the OCSP Status on the cert
+	if renewer != nil {
 		for {
-			s, err := renewer.GetStaple()
-			if err != nil {
-				os.Exit(1)
-			}
+			s := renewer.GetStaple()
 			if s != nil {
-				fmt.Println(s.Status)
+				switch s.Status {
+				case ocsp.Good:
+					fmt.Printf("Good: %d\n", s.Status)
+				case ocsp.Revoked:
+					fmt.Printf("Revoked: %d\n", s.Status)
+				case ocsp.Unknown:
+					fmt.Printf("Unknown: %d\n", s.Status)
+				}
 			} else {
 				fmt.Println("No OCSP Response Yet")
 			}
+			// Mimic an http request from a client that happens every 5 seconds
 			time.Sleep(5 * time.Second)
 		}
 	}
-
 }
