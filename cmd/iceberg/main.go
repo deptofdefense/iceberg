@@ -565,26 +565,27 @@ func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x50
 		MinVersion:               TLSVersionIdentifiers[minVersion],
 		MaxVersion:               TLSVersionIdentifiers[maxVersion],
 		PreferServerCipherSuites: tlsPreferServerCipherSuites,
-		GetCertificate: func(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	}
+
+	if v.GetBool(flagOCSPServer) {
+		config.GetCertificate = func(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			cert := serverKeyPair
-			if v.GetBool(flagOCSPServer) {
-				staple := renewer.GetStaple()
-				if staple != nil {
-					switch staple.Status {
-					case ocsp.Good:
-						cert.OCSPStaple = renewer.GetStapleRaw()
-					case ocsp.Revoked:
-						// See RFC 5280
-						_ = logger.Log(fmt.Sprintf("OCSP Response Revoked for reason code %d", staple.RevocationReason))
-					case ocsp.Unknown:
-						_ = logger.Log("OCSP Response Unknown")
-					}
-				} else {
-					_ = logger.Log("No OCSP Response Yet")
+			staple := renewer.GetStaple()
+			if staple != nil {
+				switch staple.Status {
+				case ocsp.Good:
+					cert.OCSPStaple = renewer.GetStapleRaw()
+				case ocsp.Revoked:
+					// See RFC 5280
+					_ = logger.Log(fmt.Sprintf("OCSP Response Revoked for reason code %d", staple.RevocationReason))
+				case ocsp.Unknown:
+					_ = logger.Log("OCSP Response Unknown")
 				}
+			} else {
+				_ = logger.Log("No OCSP Response Yet")
 			}
 			return &cert, nil
-		},
+		}
 	}
 
 	if len(cipherSuites) > 0 {
