@@ -1,15 +1,12 @@
-package main
+package ocsprenewer
 
 import (
 	"bytes"
 	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
-	"path"
 	"sync"
 	"time"
 
@@ -158,16 +155,6 @@ func (renewer *OCSPRenewer) Renew() error {
 	return nil
 }
 
-func parseCert(filename string) (*x509.Certificate, error) {
-	r, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	block, _ := pem.Decode(r)
-	cert, err := x509.ParseCertificate(block.Bytes)
-	return cert, err
-}
-
 // New returns a new OCSPRenewer
 func New(cert, issuer *x509.Certificate, httpClient *http.Client, refreshRatio float64, refreshMin time.Duration) *OCSPRenewer {
 	return &OCSPRenewer{
@@ -176,64 +163,5 @@ func New(cert, issuer *x509.Certificate, httpClient *http.Client, refreshRatio f
 		HTTPClient:   httpClient,
 		RefreshRatio: refreshRatio,
 		RefreshMin:   refreshMin,
-	}
-}
-
-func main() {
-
-	certDir := "./temp/"
-
-	cert, err := parseCert(path.Join(certDir, "client.crt"))
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	issuer, err := parseCert(path.Join(certDir, "ca.crt"))
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	// Only do OCSPRenewer if the server exists to make the request
-	// Will also want a flag that controls this which takes precedence over the value on the cert
-	var renewer *OCSPRenewer
-	if len(cert.OCSPServer) > 0 {
-
-		httpClient := http.Client{Timeout: 5 * time.Second}
-		renewer = New(cert, issuer, &httpClient, 0.8, 5*time.Minute)
-		go func() {
-			// The tick time should likely be half the RefreshMin
-			for ; true; <-time.Tick(10 * time.Second) {
-				err := renewer.Renew()
-				// Record errors but don't break, this helps recover from server outages.
-				if err != nil {
-					fmt.Println(err)
-				}
-			}
-		}()
-
-	}
-
-	// Example of how to view the OCSP Status on the cert
-	if renewer != nil {
-		for {
-			s := renewer.GetStaple()
-			if s != nil {
-				switch s.Status {
-				case ocsp.Good:
-					fmt.Printf("Good: %d\n", s.Status)
-				case ocsp.Revoked:
-					// See RFC 5280
-					fmt.Printf("Revoked: %d, Reason: %d\n", s.Status, s.RevocationReason)
-				case ocsp.Unknown:
-					fmt.Printf("Unknown: %d\n", s.Status)
-				}
-			} else {
-				fmt.Println("No OCSP Response Yet")
-			}
-			// Mimic an http request from a client that happens every 5 seconds
-			time.Sleep(5 * time.Second)
-		}
 	}
 }
