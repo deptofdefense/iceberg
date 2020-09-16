@@ -1,3 +1,10 @@
+// =================================================================
+//
+// Work of the U.S. Department of Defense, Defense Digital Service.
+// Released as open source under the MIT License.  See LICENSE file.
+//
+// =================================================================
+
 package ocsprenewer
 
 import (
@@ -148,6 +155,10 @@ func (renewer *OCSPRenewer) Renew() error {
 
 	if ocspResp == nil {
 		return errors.New("no OCSP Response")
+	}
+
+	if err := ocspResp.CheckSignatureFrom(renewer.Issuer); err != nil {
+		return fmt.Errorf("invalid ocsp signature: %w", err)
 	}
 
 	renewer.staple = ocspResp
