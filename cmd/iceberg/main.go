@@ -31,6 +31,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"golang.org/x/crypto/ocsp"
 
 	"github.com/deptofdefense/iceberg/pkg/certs"
 	"github.com/deptofdefense/iceberg/pkg/log"
@@ -555,7 +556,7 @@ func initCertificateRevocationLists(p string, format string) (map[string][]pkix.
 	return nil, fmt.Errorf("error parsing CRL from file %q: unknown format %q", p, format)
 }
 
-func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x509.CertPool, minVersion string, maxVersion string, cipherSuites []uint16, tlsPreferServerCipherSuites bool) *tls.Config {
+func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x509.CertPool, minVersion string, maxVersion string, cipherSuites []uint16, tlsPreferServerCipherSuites bool, renewer *ocsprenewer.OCSPRenewer, logger *log.SimpleLogger) *tls.Config {
 
 	config := &tls.Config{
 		Certificates:             []tls.Certificate{serverKeyPair},
@@ -564,7 +565,28 @@ func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x50
 		MinVersion:               TLSVersionIdentifiers[minVersion],
 		MaxVersion:               TLSVersionIdentifiers[maxVersion],
 		PreferServerCipherSuites: tlsPreferServerCipherSuites,
+		GetCertificate: func(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			cert := serverKeyPair
+			if v.GetBool(flagOCSPServer) {
+				staple := renewer.GetStaple()
+				if staple != nil {
+					switch staple.Status {
+					case ocsp.Good:
+						cert.OCSPStaple = renewer.GetStapleRaw()
+					case ocsp.Revoked:
+						// See RFC 5280
+						_ = logger.Log(fmt.Sprintf("OCSP Response Revoked for reason code %d", staple.RevocationReason))
+					case ocsp.Unknown:
+						_ = logger.Log("OCSP Response Unknown")
+					}
+				} else {
+					_ = logger.Log("No OCSP Response Yet")
+				}
+			}
+			return &cert, nil
+		},
 	}
+
 	if len(cipherSuites) > 0 {
 		config.CipherSuites = cipherSuites
 	}
@@ -838,7 +860,7 @@ func main() {
 				return fmt.Errorf("error initializing certificate revocation lists: %w", err)
 			}
 
-			tlsConfig := initTLSConfig(v, serverKeyPair, clientCAs, tlsMinVersion, tlsMaxVersion, cipherSuites, tlsPreferServerCipherSuites)
+			tlsConfig := initTLSConfig(v, serverKeyPair, clientCAs, tlsMinVersion, tlsMaxVersion, cipherSuites, tlsPreferServerCipherSuites, renewer, logger)
 
 			redirectNotFound := v.GetString(flagBehaviorNotFound) == BehaviorRedirect
 

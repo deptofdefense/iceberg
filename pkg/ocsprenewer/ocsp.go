@@ -29,7 +29,8 @@ type OCSPRenewer struct {
 	RefreshRatio        float64           // the percentage of time to wait between ThisUpdate and NextUpdate before renewing
 	RefreshMin          time.Duration     // the minimum time that must elapse before a new OCSP request is issued
 
-	staple *ocsp.Response // the response from the OCSP Responder
+	staple    *ocsp.Response // the response from the OCSP Responder
+	stapleRaw []byte         // the raw response from the OCSP Responder
 }
 
 // GetStaple returns the OCSP Response
@@ -37,6 +38,13 @@ func (renewer *OCSPRenewer) GetStaple() *ocsp.Response {
 	renewer.Lock()
 	defer renewer.Unlock()
 	return renewer.staple
+}
+
+// GetStapleRaw returns the raw OCSP Response
+func (renewer *OCSPRenewer) GetStapleRaw() []byte {
+	renewer.Lock()
+	defer renewer.Unlock()
+	return renewer.stapleRaw
 }
 
 // ShouldRenew indicates if the OCSP Staple should be renewed
@@ -157,11 +165,8 @@ func (renewer *OCSPRenewer) Renew() error {
 		return errors.New("no OCSP Response")
 	}
 
-	if err := ocspResp.CheckSignatureFrom(renewer.Issuer); err != nil {
-		return fmt.Errorf("invalid ocsp signature: %w", err)
-	}
-
 	renewer.staple = ocspResp
+	renewer.stapleRaw = raw
 
 	return nil
 }
