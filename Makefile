@@ -151,11 +151,11 @@ ocsp_responder:
 
 .PHONY: ocsp_validate_server
 ocsp_validate_server:
-	openssl ocsp -CAfile temp/ca.crt -issuer temp/ca.crt -cert temp/server.crt -url http://localhost:9999 -resp_text
+	openssl ocsp -CAfile temp/ca.crt -VAfile temp/ocsp.crt -issuer temp/ca.crt -cert temp/server.crt -url http://localhost:9999 -resp_text
 
 .PHONY: ocsp_validate_client
 ocsp_validate_client:
-	openssl ocsp -CAfile temp/ca.crt -issuer temp/ca.crt -cert temp/client.crt -url http://localhost:9999 -resp_text
+	openssl ocsp -CAfile temp/ca.crt -VAfile temp/ocsp.crt -issuer temp/ca.crt -cert temp/client.crt -url http://localhost:9999 -resp_text
 
 .PHONY: ocsp_revoke_server
 ocsp_revoke_server:
