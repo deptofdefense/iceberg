@@ -32,6 +32,11 @@ Flags:
     --dry-run                           exit after checking configuration
 -h, --help                              help for serve
 -l, --log string                        path to the log output.  Defaults to stdout. (default "-")
+    --ocsp-http-timeout duration        the maximum amount of time before OCSP http requests timeout (default 30s)
+    --ocsp-refresh-min duration         the minimum amount of time to wait before a refresh can occur (default 5m0s)
+    --ocsp-refresh-ratio float          the amount of time to wait for renewal between OCSP production and next update (default 0.8)
+    --ocsp-renew-interval duration      interval to run OCSP renewal (default 5m0s)
+    --ocsp-server                       enable OCSP checking on the server certificate
     --public-location string            the public location of the server used for redirects
     --redirect string                   address that iceberg will listen to and redirect requests to the public location
 -r, --root string                       path to the document root served
