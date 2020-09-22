@@ -111,6 +111,17 @@ var (
 	PEMCRLType   = "X509 CRL"
 )
 
+const (
+	OCSPMinRefreshRatio  = 0.1
+	OCSPMaxRefreshRatio  = 0.9
+	OCSPMinRenewInterval = 10 * time.Second
+	OCSPMaxRenewInterval = 1 * time.Hour
+	OCSPMinRefreshMin    = 1 * time.Minute
+	OCSPMaxRefreshMin    = 24 * time.Hour
+	OCSPMinHTTPTimeout   = 1 * time.Second
+	OCSPMaxHTTPTimeout   = 60 * time.Second
+)
+
 func stringSliceContains(stringSlice []string, value string) bool {
 	for _, x := range stringSlice {
 		if value == x {
@@ -237,10 +248,10 @@ func initTLSFlags(flag *pflag.FlagSet) {
 
 func initOCSPFlags(flag *pflag.FlagSet) {
 	flag.Bool(flagOCSPServer, false, "enable OCSP checking on the server certificate")
-	flag.String(flagOCSPRenewInterval, "5m", "interval to run OCSP renewal")
+	flag.Duration(flagOCSPRenewInterval, 5*time.Minute, "interval to run OCSP renewal")
 	flag.Float64(flagOCSPRefreshRatio, 0.8, "the amount of time to wait for renewal between OCSP production and next update")
-	flag.String(flagOCSPRefreshMin, "5m", "the minimum amount of time to wait before a refresh can occur")
-	flag.String(flagOCSPHTTPTimeout, "30s", "the maximum amount of time before OCSP http requests timeout")
+	flag.Duration(flagOCSPRefreshMin, 5*time.Minute, "the minimum amount of time to wait before a refresh can occur")
+	flag.Duration(flagOCSPHTTPTimeout, 30*time.Second, "the maximum amount of time before OCSP http requests timeout")
 }
 
 func initAccessPolicyFlags(flag *pflag.FlagSet) {
@@ -399,29 +410,18 @@ func checkTLSConfig(v *viper.Viper, supportedCipherSuites []*tls.CipherSuite) er
 }
 
 func checkOCSPConfig(v *viper.Viper) error {
-	minRefreshRatio := 0.1
-	maxRefreshRatio := 0.9
 	if v.GetBool(flagOCSPServer) {
-		minRenewInterval := 10 * time.Second
-		maxRenewInterval := 1 * time.Hour
-		if renewInterval := v.GetDuration(flagOCSPRenewInterval); minRenewInterval < renewInterval || renewInterval > maxRenewInterval {
-			return fmt.Errorf("the OCSP renew interval must fall between %q and %q, %q was provided", minRenewInterval, maxRenewInterval, renewInterval)
+		if renewInterval := v.GetDuration(flagOCSPRenewInterval); renewInterval < OCSPMinRenewInterval || renewInterval > OCSPMaxRenewInterval {
+			return fmt.Errorf("the OCSP renew interval must fall between %q and %q, %q was provided", OCSPMinRenewInterval, OCSPMaxRenewInterval, renewInterval)
 		}
-
-		if refreshRatio := v.GetFloat64(flagOCSPRefreshRatio); refreshRatio < minRefreshRatio || refreshRatio > maxRefreshRatio {
-			return fmt.Errorf("refresh ratio must fall between %f and %f, %f was provided", minRefreshRatio, maxRefreshRatio, refreshRatio)
+		if refreshRatio := v.GetFloat64(flagOCSPRefreshRatio); refreshRatio < OCSPMinRefreshRatio || refreshRatio > OCSPMaxRefreshRatio {
+			return fmt.Errorf("refresh ratio must fall between %f and %f, %f was provided", OCSPMinRefreshRatio, OCSPMaxRefreshRatio, refreshRatio)
 		}
-
-		minRefreshMin := 1 * time.Minute
-		maxRefreshMin := 24 * time.Hour
-		if refreshMin := v.GetDuration(flagOCSPRefreshMin); refreshMin < minRefreshMin || refreshMin > maxRefreshMin {
-			return fmt.Errorf("refresh minimum time must fall between %q and %q, %q was provided", minRefreshMin, maxRefreshMin, refreshMin)
+		if refreshMin := v.GetDuration(flagOCSPRefreshMin); refreshMin < OCSPMinRefreshMin || refreshMin > OCSPMaxRefreshMin {
+			return fmt.Errorf("refresh minimum time must fall between %q and %q, %q was provided", OCSPMinRefreshMin, OCSPMaxRefreshMin, refreshMin)
 		}
-
-		minHTTPTimeout := 1 * time.Second
-		maxHTTPTimeout := 60 * time.Second
-		if httpTimeout := v.GetDuration(flagOCSPHTTPTimeout); minHTTPTimeout < httpTimeout || httpTimeout > maxHTTPTimeout {
-			return fmt.Errorf("the OCSP http client timeout must fall between %q and %q, %q was provided", minHTTPTimeout, maxHTTPTimeout, httpTimeout)
+		if httpTimeout := v.GetDuration(flagOCSPHTTPTimeout); httpTimeout < OCSPMinHTTPTimeout || httpTimeout > OCSPMaxHTTPTimeout {
+			return fmt.Errorf("the OCSP http client timeout must fall between %q and %q, %q was provided", OCSPMinHTTPTimeout, OCSPMaxHTTPTimeout, httpTimeout)
 		}
 	}
 	return nil
