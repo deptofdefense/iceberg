@@ -280,10 +280,20 @@ TBD
 
 ### OCSP
 
-OCSP is the preferred method of managing certificate revocation. In order to work with OCSP you first need to create OCSP certificate and key pair in order to run an OCSP responder server with OpenSSL. Additionally you'll need a client key to verify.
+**NOTE:** At this time this will not work with Docker.
+
+OCSP is the preferred method of managing certificate revocation. In order to work with OCSP you first need to create OCSP certificate and key pair in order to run an OCSP responder server with OpenSSL. Additionally you'll need a server or client key to verify.
+
+Start by ensuring all certs are renewed:
 
 ```sh
-make temp/ocsp.crt temp/client.p12
+rm -rf temp && make temp/ca.crt temp/ocsp.crt temp/client.p12 temp/server.crt
+```
+
+Now turn on the OCSP Responder server in another terminal instance:
+
+```sh
+make ocsp_responder
 ```
 
 Verify the OCSP server information is on the client certificate with:
@@ -300,39 +310,90 @@ A section that looks like this should appear:
                 OCSP - URI:http://127.0.0.1:9999
 ```
 
-Now run the OCSP responder server in another terminal
-
-```sh
-make ocsp_responder
-```
-
 Validate the client certificate with:
 
 ```sh
 make ocsp_validate_client
 ```
 
-Test this with golang run:
+You will see a response like:
 
-```sh
-go run ./pkg/ocsp/ocsp.go
+```text
+...
+Response verify OK
+temp/client.crt: unknown
+        This Update: Sep 22 22:06:51 2020 GMT
+        Next Update: Sep 22 22:11:51 2020 GMT
 ```
 
-See the output: "Good"
-
-Now revoke the cert:
+Validate the server certificate with:
 
 ```sh
-make ocsp_revoke_client
+make ocsp_validate_server
+```
+
+You will see a response like:
+
+```text
+...
+Response verify OK
+temp/server.crt: unknown
+        This Update: Sep 22 22:06:51 2020 GMT
+        Next Update: Sep 22 22:11:51 2020 GMT
+```
+
+Run the server now:
+
+```sh
+rm bin/iceberg && make bin/iceberg serve_example
+```
+
+Get a file to show things are working and check that the OCSP responder was connected to:
+
+```sh
+make check_client_response
+```
+
+Check the OCSP response:
+
+```sh
+make ocsp_check_client_response
+```
+
+Now revoke the server:
+
+```sh
+make ocsp_revoke_server
+```
+
+Validate the server certificate was revoked with:
+
+```sh
+make ocsp_validate_server
+```
+
+Check for output that has the `Revocation Time`:
+
+```text
+...
+Response verify OK
+temp/server.crt: revoked
+        This Update: Sep 22 21:52:29 2020 GMT
+        Next Update: Sep 22 21:57:29 2020 GMT
+        Revocation Time: Sep 22 21:52:11 2020 GMT
 ```
 
 And run again:
 
 ```sh
-go run ./pkg/ocsp/ocsp.go
+make check_client_response
 ```
 
-See the output: "Revoked"
+And check response:
+
+```sh
+make ocsp_check_client_response
+```
 
 ## Contributing
 

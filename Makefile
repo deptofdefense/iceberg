@@ -7,7 +7,7 @@
 
 .PHONY: help
 help:  ## Print the help documentation
-	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[\/a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 #
 # Go building, formatting, testing, and installing
@@ -74,6 +74,25 @@ build_release: bin/gox
 	scripts/build-release
 
 #
+# Local
+#
+
+# Use this for OCSP testing because OCSP responder runs on local host
+serve_example: bin/iceberg  ## Serve using local binary
+	bin/iceberg serve \
+	--addr :8080 \
+	--server-cert ./temp/server.crt \
+	--server-key ./temp/server.key \
+	--client-ca ./temp/ca.crt \
+	--client-ca-format pem \
+	--ocsp-refresh-min 1m \
+	--ocsp-renew-interval 10s \
+	--ocsp-server \
+	--root ./examples/public \
+	--template ./examples/conf/template.html \
+	--access-policy ./examples/conf/example.json
+
+#
 # Docker
 #
 
@@ -131,12 +150,12 @@ temp/client.p12: temp/ca.crt temp/client.crt
 	openssl pkcs12 -export -out temp/client.p12 -inkey temp/client.key -in temp/client.crt -certfile temp/ca.crt -passout pass:
 
 .PHONY: crl
-crl:
+crl:  ## Create the Certificate Revocation List
 	rm -f temp/ca.crl.pem temp/ca.crl.der
 	make temp/ca.crl.der
 
-.PHONY: revoke
-revoke:
+.PHONY: crl_revoke_client
+crl_revoke_client:  ## Revoke client certificate with CRL
 	openssl ca -batch -config examples/conf/openssl.cnf -cert temp/ca.crt -keyfile temp/ca.key -revoke temp/client.crt
 
 temp/ocsp.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
@@ -146,25 +165,33 @@ temp/ocsp.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
 	openssl ca -batch -config examples/conf/openssl.cnf -notext -in temp/ocsp.csr -out temp/ocsp.crt
 
 .PHONY: ocsp_responder
-ocsp_responder:
+ocsp_responder:  ## Start an OCSP Responder server
 	openssl ocsp -index temp/index.txt -port 9999 -rsigner temp/ocsp.crt -rkey temp/ocsp.key -CA temp/ca.crt -text -out temp/ocsp.log -nmin 5
 
 .PHONY: ocsp_validate_server
-ocsp_validate_server:
-	openssl ocsp -CAfile temp/ca.crt -VAfile temp/ocsp.crt -issuer temp/ca.crt -cert temp/server.crt -url http://localhost:9999 -resp_text
+ocsp_validate_server:  ## Validate server certificate with OCSP
+	openssl ocsp -CAfile temp/ca.crt -VAfile temp/ocsp.crt -issuer temp/ca.crt -cert temp/server.crt -url http://127.0.0.1:9999 -resp_text
 
 .PHONY: ocsp_validate_client
-ocsp_validate_client:
-	openssl ocsp -CAfile temp/ca.crt -VAfile temp/ocsp.crt -issuer temp/ca.crt -cert temp/client.crt -url http://localhost:9999 -resp_text
+ocsp_validate_client:  ## Validate client certificate with OCSP
+	openssl ocsp -CAfile temp/ca.crt -VAfile temp/ocsp.crt -issuer temp/ca.crt -cert temp/client.crt -url http://127.0.0.1:9999 -resp_text
 
 .PHONY: ocsp_revoke_server
-ocsp_revoke_server:
+ocsp_revoke_server:  ## Revoke server certificate with OCSP
 	openssl ca -batch -config examples/conf/openssl.cnf -cert temp/ca.crt -keyfile temp/ca.key -revoke temp/server.crt
 
 .PHONY: ocsp_revoke_client
-ocsp_revoke_client:
+ocsp_revoke_client:  ## Revoke client certificate with OCSP
 	openssl ca -batch -config examples/conf/openssl.cnf -cert temp/ca.crt -keyfile temp/ca.key -revoke temp/client.crt
 
+.PHONY: ocsp_check_client_response
+check_client_response:  ## Check that the client will respond
+	curl --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt https://iceberglocal:8080/index.html
+
+.PHONY: ocsp_check_client_response
+ocsp_check_client_response:  ## Check the ocsp client response
+	curl --tlsv1.2 -S --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt --cert-status https://iceberglocal:8080/index.html -v
+	# openssl s_client -connect iceberglocal:8080 -tls1_2 -CAfile temp/ca.crt -cert temp/client.crt -key temp/client.key -status
 
 ## Clean
 

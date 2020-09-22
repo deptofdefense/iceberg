@@ -29,8 +29,7 @@ type OCSPRenewer struct {
 	RefreshRatio        float64           // the percentage of time to wait between ThisUpdate and NextUpdate before renewing
 	RefreshMin          time.Duration     // the minimum time that must elapse before a new OCSP request is issued
 
-	staple    *ocsp.Response // the response from the OCSP Responder
-	stapleRaw []byte         // the raw response from the OCSP Responder
+	staple *ocsp.Response // the response from the OCSP Responder
 }
 
 // GetStaple returns the OCSP Response
@@ -44,7 +43,7 @@ func (renewer *OCSPRenewer) GetStaple() *ocsp.Response {
 func (renewer *OCSPRenewer) GetStapleRaw() []byte {
 	renewer.Lock()
 	defer renewer.Unlock()
-	return renewer.stapleRaw
+	return renewer.staple.TBSResponseData
 }
 
 // ShouldRenew indicates if the OCSP Staple should be renewed
@@ -134,7 +133,7 @@ func (renewer *OCSPRenewer) Renew() error {
 		defer func() {
 			errRespClose := resp.Body.Close()
 			if errRespClose != nil {
-				fmt.Printf("unable to close http body: %s", errRespClose)
+				fmt.Printf("unable to close http body: %s\n", errRespClose)
 			}
 		}()
 	}
@@ -166,7 +165,6 @@ func (renewer *OCSPRenewer) Renew() error {
 	}
 
 	renewer.staple = ocspResp
-	renewer.stapleRaw = raw
 
 	return nil
 }

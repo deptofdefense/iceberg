@@ -569,17 +569,19 @@ func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x50
 
 	if v.GetBool(flagOCSPServer) {
 		config.GetCertificate = func(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			_ = logger.Log("Attempting to get OCSP Staple to attach to response")
 			cert := serverKeyPair
 			staple := renewer.GetStaple()
 			if staple != nil {
 				switch staple.Status {
 				case ocsp.Good:
+					_ = logger.Log("Attaching OCSP Staple")
 					cert.OCSPStaple = renewer.GetStapleRaw()
 				case ocsp.Revoked:
 					// See RFC 5280
-					_ = logger.Log(fmt.Sprintf("OCSP Response Revoked for reason code %d", staple.RevocationReason))
+					_ = logger.Log(fmt.Sprintf("OCSP Response Revoked, server certificate deliberately revoked for reason code %d", staple.RevocationReason))
 				case ocsp.Unknown:
-					_ = logger.Log("OCSP Response Unknown")
+					_ = logger.Log(fmt.Sprintf("OCSP Response Unknown, responder may not know about this certificate: %+v", *staple))
 				}
 			} else {
 				_ = logger.Log("No OCSP Response Yet")
@@ -833,6 +835,7 @@ func main() {
 					// The tick time should likely be half the RefreshMin
 					for ; true; <-time.Tick(v.GetDuration(flagOCSPRenewInterval)) {
 						errRenew := renewer.Renew()
+						_ = logger.Log("Renewing OCSP Staple")
 						// Log errors but don't break, this helps recover from OCSP service outages.
 						if errRenew != nil {
 							_ = logger.Log(fmt.Sprintf("OCSP renewal error: %v", errRenew))
