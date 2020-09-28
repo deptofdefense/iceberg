@@ -180,7 +180,7 @@ temp/ocsp.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
 
 .PHONY: ocsp_responder
 ocsp_responder:  ## Start an OCSP Responder server
-	openssl ocsp -index temp/index.txt -port 9999 -rsigner temp/ocsp.crt -rkey temp/ocsp.key -rother temp/ocsp.crt -CA temp/ca.crt -text -out temp/ocsp.log -nmin 5
+	openssl ocsp -index temp/index.txt -port 9999 -rsigner temp/ocsp.crt -rkey temp/ocsp.key -CA temp/ca.crt -text -out temp/ocsp.log -nmin 5
 
 .PHONY: ocsp_validate_server
 ocsp_validate_server:  ## Validate server certificate with OCSP
