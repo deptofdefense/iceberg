@@ -29,7 +29,8 @@ type OCSPRenewer struct {
 	RefreshRatio        float64           // the percentage of time to wait between ThisUpdate and NextUpdate before renewing
 	RefreshMin          time.Duration     // the minimum time that must elapse before a new OCSP request is issued
 
-	staple *ocsp.Response // the response from the OCSP Responder
+	raw    []byte         // the raw response from the OCSP responder
+	staple *ocsp.Response // the parsed response from the OCSP responder
 }
 
 // GetStaple returns the OCSP Response
@@ -43,7 +44,21 @@ func (renewer *OCSPRenewer) GetStaple() *ocsp.Response {
 func (renewer *OCSPRenewer) GetStapleRaw() []byte {
 	renewer.Lock()
 	defer renewer.Unlock()
-	return renewer.staple.TBSResponseData
+	return renewer.raw
+}
+
+func (renewer *OCSPRenewer) GetServers() []string {
+	if renewer.Certificate == nil {
+		return []string{}
+	}
+	return renewer.Certificate.OCSPServer
+}
+
+func (renewer *OCSPRenewer) GetFirstServer() string {
+	if renewer.Certificate == nil || renewer.Certificate.OCSPServer == nil || len(renewer.Certificate.OCSPServer) == 0 {
+		return ""
+	}
+	return renewer.Certificate.OCSPServer[0]
 }
 
 // ShouldRenew indicates if the OCSP Staple should be renewed
@@ -116,7 +131,7 @@ func (renewer *OCSPRenewer) Renew() error {
 
 	ocspReq, err := ocsp.CreateRequest(renewer.Certificate, renewer.Issuer, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating OCSP request: %w", err)
 	}
 
 	req, err := http.NewRequest(
@@ -124,10 +139,13 @@ func (renewer *OCSPRenewer) Renew() error {
 		renewer.Certificate.OCSPServer[0],
 		bytes.NewReader(ocspReq))
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating HTTP request: %w", err)
 	}
 
 	req.Header.Set("User-Agent", "ocsp")
+	req.Header.Set("Content-Type", "application/ocsp-request")
+	req.Header.Set("Accept", "*/*")
+
 	resp, err := renewer.HTTPClient.Do(req)
 	if resp != nil {
 		defer func() {
@@ -139,12 +157,12 @@ func (renewer *OCSPRenewer) Renew() error {
 	}
 	// If there's an HTTP error then set up a backoff to retry until success
 	if err != nil {
-		return err
+		return fmt.Errorf("error making OCSP request: %w", err)
 	}
 
 	raw, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("error reading OCSP response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -157,14 +175,16 @@ func (renewer *OCSPRenewer) Renew() error {
 			// https://tools.ietf.org/html/rfc6960#section-4.2.1
 			fmt.Printf("Response error: %s", re.Status.String())
 		}
-		return err
+		return fmt.Errorf("error parsing OCSP response for certificate: %w", err)
 	}
 
 	if ocspResp == nil {
 		return errors.New("no OCSP Response")
 	}
 
-	renewer.staple = ocspResp
+	renewer.raw = raw // set raw to the raw response from the OCSP responder
+
+	renewer.staple = ocspResp // set staple to the parsed response from the OCSP responder
 
 	return nil
 }

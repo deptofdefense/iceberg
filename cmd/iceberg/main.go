@@ -15,8 +15,10 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -188,7 +190,8 @@ const (
 	//
 	flagBehaviorNotFound = "behavior-not-found"
 	//
-	flagLogPath = "log"
+	flagLogPath    = "log"
+	flagKeyLogPath = "keylog"
 	//
 	flagDryRun = "dry-run"
 	//
@@ -218,6 +221,7 @@ func initFlags(flag *pflag.FlagSet) {
 	flag.StringP(flagRootPath, "r", "", "path to the document root served")
 	flag.StringP(flagTemplatePath, "t", "", "path to the template file used during directory listing")
 	flag.StringP(flagLogPath, "l", "-", "path to the log output.  Defaults to stdout.")
+	flag.String(flagKeyLogPath, "", "path to the key log output")
 	flag.String(flagBehaviorNotFound, BehaviorNone, "default behavior when a file is not found.  One of: "+strings.Join(Behaviors, ","))
 	initAccessPolicyFlags(flag)
 	initTimeoutFlags(flag)
@@ -481,6 +485,24 @@ func initLogger(path string) (*log.SimpleLogger, error) {
 	return log.NewSimpleLogger(f), nil
 }
 
+func initKeyLogger(path string) (io.Writer, error) {
+
+	if len(path) == 0 {
+		return nil, nil
+	}
+
+	if path == "-" {
+		return nil, errors.New("stdout is not supported for key log")
+	}
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("error opening key log file %q: %w", path, err)
+	}
+
+	return f, nil
+}
+
 func getTLSVersion(r *http.Request) string {
 	for k, v := range TLSVersionIdentifiers {
 		if v == r.TLS.Version {
@@ -556,7 +578,46 @@ func initCertificateRevocationLists(p string, format string) (map[string][]pkix.
 	return nil, fmt.Errorf("error parsing CRL from file %q: unknown format %q", p, format)
 }
 
-func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x509.CertPool, minVersion string, maxVersion string, cipherSuites []uint16, tlsPreferServerCipherSuites bool, renewer *ocsprenewer.OCSPRenewer, logger *log.SimpleLogger) *tls.Config {
+func initOCSPRenewer(v *viper.Viper, serverCert *x509.Certificate, logger *log.SimpleLogger) (*ocsprenewer.OCSPRenewer, error) {
+
+	// if not enabled or OCSPServer is not defined for server certificate
+	if (!v.GetBool(flagOCSPServer)) || len(serverCert.OCSPServer) == 0 {
+		return nil, nil
+	}
+
+	issuerCert, errIssuerCert := certs.ParseCert(v.GetString(flagClientCA))
+	if errIssuerCert != nil {
+		return nil, fmt.Errorf("unable to parse server certificate issuer: %w", errIssuerCert)
+	}
+
+	httpClient := http.Client{
+		Timeout: v.GetDuration(flagOCSPHTTPTimeout),
+	}
+
+	refreshRatio := v.GetFloat64(flagOCSPRefreshRatio)
+
+	refreshMin := v.GetDuration(flagOCSPRefreshMin)
+
+	renewer := ocsprenewer.New(serverCert, issuerCert, &httpClient, refreshRatio, refreshMin)
+
+	go func() {
+		// The tick time should likely be half the RefreshMin
+		for ; true; <-time.Tick(v.GetDuration(flagOCSPRenewInterval)) {
+			_ = logger.Log("Renewing OCSP Staple", map[string]interface{}{
+				"server": renewer.GetFirstServer(),
+			})
+			errRenew := renewer.Renew()
+			// Log errors but don't break, this helps recover from OCSP service outages.
+			if errRenew != nil {
+				_ = logger.Log(fmt.Sprintf("OCSP renewal error: %v", errRenew))
+			}
+		}
+	}()
+
+	return renewer, nil
+}
+
+func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x509.CertPool, minVersion string, maxVersion string, cipherSuites []uint16, tlsPreferServerCipherSuites bool, renewer *ocsprenewer.OCSPRenewer, logger *log.SimpleLogger, keyLogger io.Writer) *tls.Config {
 
 	config := &tls.Config{
 		Certificates:             []tls.Certificate{serverKeyPair},
@@ -565,6 +626,7 @@ func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x50
 		MinVersion:               TLSVersionIdentifiers[minVersion],
 		MaxVersion:               TLSVersionIdentifiers[maxVersion],
 		PreferServerCipherSuites: tlsPreferServerCipherSuites,
+		KeyLogWriter:             keyLogger,
 	}
 
 	if v.GetBool(flagOCSPServer) {
@@ -575,8 +637,11 @@ func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x50
 			if staple != nil {
 				switch staple.Status {
 				case ocsp.Good:
-					_ = logger.Log("Attaching OCSP Staple")
-					cert.OCSPStaple = renewer.GetStapleRaw()
+					staple := renewer.GetStapleRaw()
+					_ = logger.Log("Attaching OCSP Staple", map[string]interface{}{
+						"size": len(staple),
+					})
+					cert.OCSPStaple = staple
 				case ocsp.Revoked:
 					// See RFC 5280
 					_ = logger.Log(fmt.Sprintf("OCSP Response Revoked, server certificate deliberately revoked for reason code %d", staple.RevocationReason))
@@ -780,6 +845,11 @@ func main() {
 				return fmt.Errorf("error initializing logger: %w", err)
 			}
 
+			keyLogger, err := initKeyLogger(v.GetString(flagKeyLogPath))
+			if err != nil {
+				return fmt.Errorf("error initializing key logger: %w", err)
+			}
+
 			listenAddress := v.GetString(flagListenAddr)
 			redirectAddress := v.GetString(flagRedirectAddr)
 			publicLocation := v.GetString(flagPublicLocation)
@@ -817,31 +887,16 @@ func main() {
 				return fmt.Errorf("unable to parse server certificate: %w", errServerCert)
 			}
 
-			// Only run OCSPRenewer if the flag is set and the OCSP server exists to make the request
-			// Will also want a flag that controls this which takes precedence over the value on the cert
-			var renewer *ocsprenewer.OCSPRenewer
-			if v.GetBool(flagOCSPServer) && len(serverCert.OCSPServer) > 0 {
+			renewer, err := initOCSPRenewer(v, serverCert, logger)
+			if err != nil {
+				return fmt.Errorf("error initializing OCSP renewer: %w", err)
+			}
 
-				issuerCert, errIssuerCert := certs.ParseCert(v.GetString(flagClientCA))
-				if err != nil {
-					return fmt.Errorf("unable to parse client CA certificate: %w", errIssuerCert)
+			if renewer != nil {
+				_ = logger.Log("Renewing OCSP Staple")
+				if errRenew := renewer.Renew(); errRenew != nil {
+					_ = logger.Log(fmt.Sprintf("OCSP renewal error: %v", errRenew))
 				}
-
-				httpClient := http.Client{Timeout: v.GetDuration(flagOCSPHTTPTimeout)}
-				refreshRatio := v.GetFloat64(flagOCSPRefreshRatio)
-				refreshMin := v.GetDuration(flagOCSPRefreshMin)
-				renewer = ocsprenewer.New(serverCert, issuerCert, &httpClient, refreshRatio, refreshMin)
-				go func() {
-					// The tick time should likely be half the RefreshMin
-					for ; true; <-time.Tick(v.GetDuration(flagOCSPRenewInterval)) {
-						errRenew := renewer.Renew()
-						_ = logger.Log("Renewing OCSP Staple")
-						// Log errors but don't break, this helps recover from OCSP service outages.
-						if errRenew != nil {
-							_ = logger.Log(fmt.Sprintf("OCSP renewal error: %v", errRenew))
-						}
-					}
-				}()
 			}
 
 			tlsMinVersion := v.GetString(flagTLSMinVersion)
@@ -864,7 +919,7 @@ func main() {
 				return fmt.Errorf("error initializing certificate revocation lists: %w", err)
 			}
 
-			tlsConfig := initTLSConfig(v, serverKeyPair, clientCAs, tlsMinVersion, tlsMaxVersion, cipherSuites, tlsPreferServerCipherSuites, renewer, logger)
+			tlsConfig := initTLSConfig(v, serverKeyPair, clientCAs, tlsMinVersion, tlsMaxVersion, cipherSuites, tlsPreferServerCipherSuites, renewer, logger, keyLogger)
 
 			redirectNotFound := v.GetString(flagBehaviorNotFound) == BehaviorRedirect
 

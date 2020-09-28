@@ -85,12 +85,26 @@ serve_example: bin/iceberg  ## Serve using local binary
 	--server-key ./temp/server.key \
 	--client-ca ./temp/ca.crt \
 	--client-ca-format pem \
+	--root ./examples/public \
+	--template ./examples/conf/template.html \
+	--access-policy ./examples/conf/example.json
+
+# Use this for OCSP testing because OCSP responder runs on local host
+serve_example_ocsp: bin/iceberg  ## Serve using local binary
+	bin/iceberg serve \
+	--addr :8080 \
+	--server-cert ./temp/server.crt \
+	--server-key ./temp/server.key \
+	--client-ca ./temp/ca.crt \
+	--client-ca-format pem \
+	--ocsp-http-timeout 2s \
 	--ocsp-refresh-min 1m \
 	--ocsp-renew-interval 10s \
 	--ocsp-server \
 	--root ./examples/public \
 	--template ./examples/conf/template.html \
-	--access-policy ./examples/conf/example.json
+	--access-policy ./examples/conf/example.json \
+	--keylog ./temp/keylog
 
 #
 # Docker
@@ -136,14 +150,14 @@ temp/ca.crl.der: temp/ca.crl.pem
 temp/server.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
 	mkdir -p temp
 	openssl genrsa -out temp/server.key 2048
-	openssl req -new -key temp/server.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/CN=iceberglocal" -out temp/server.csr
+	openssl req -new -config examples/conf/openssl.cnf -key temp/server.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/CN=iceberglocal" -out temp/server.csr
 	openssl ca -batch -config examples/conf/openssl.cnf -extensions server_ext -notext -in temp/server.csr -out temp/server.crt
 
 temp/client.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
 	mkdir -p temp
 	openssl genrsa -out temp/client.key 2048
 	openssl req -new -key temp/client.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/OU=CONTRACTOR/CN=LAST.FIRST.MIDDLE.ID" -out temp/client.csr
-	openssl ca -batch -config examples/conf/openssl.cnf -extensions server_ext -notext -in temp/client.csr -out temp/client.crt
+	openssl ca -batch -config examples/conf/openssl.cnf -extensions client_ext -notext -in temp/client.csr -out temp/client.crt
 
 temp/client.p12: temp/ca.crt temp/client.crt
 	mkdir -p temp
@@ -161,20 +175,20 @@ crl_revoke_client:  ## Revoke client certificate with CRL
 temp/ocsp.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
 	mkdir -p temp
 	openssl genrsa -out temp/ocsp.key 2048
-	openssl req -new -key temp/ocsp.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/OU=OCSP/CN=127.0.0.1:9999" -out temp/ocsp.csr
-	openssl ca -batch -config examples/conf/openssl.cnf -notext -in temp/ocsp.csr -out temp/ocsp.crt
+	openssl req -new -key temp/ocsp.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/OU=OCSP/CN=ocsp.iceberglocal" -out temp/ocsp.csr
+	openssl ca -batch -config examples/conf/openssl.cnf -extensions ocsp_ext -notext -in temp/ocsp.csr -out temp/ocsp.crt
 
 .PHONY: ocsp_responder
 ocsp_responder:  ## Start an OCSP Responder server
-	openssl ocsp -index temp/index.txt -port 9999 -rsigner temp/ocsp.crt -rkey temp/ocsp.key -CA temp/ca.crt -text -out temp/ocsp.log -nmin 5
+	openssl ocsp -index temp/index.txt -port 9999 -rsigner temp/ocsp.crt -rkey temp/ocsp.key -rother temp/ocsp.crt -CA temp/ca.crt -text -out temp/ocsp.log -nmin 5
 
 .PHONY: ocsp_validate_server
 ocsp_validate_server:  ## Validate server certificate with OCSP
-	openssl ocsp -CAfile temp/ca.crt -VAfile temp/ocsp.crt -issuer temp/ca.crt -cert temp/server.crt -url http://127.0.0.1:9999 -resp_text
+	openssl ocsp -CAfile temp/ca.crt -VAfile temp/ocsp.crt -issuer temp/ca.crt -cert temp/server.crt -url http://ocsp.iceberglocal:9999 -resp_text
 
 .PHONY: ocsp_validate_client
 ocsp_validate_client:  ## Validate client certificate with OCSP
-	openssl ocsp -CAfile temp/ca.crt -VAfile temp/ocsp.crt -issuer temp/ca.crt -cert temp/client.crt -url http://127.0.0.1:9999 -resp_text
+	openssl ocsp -CAfile temp/ca.crt -VAfile temp/ocsp.crt -issuer temp/ca.crt -cert temp/client.crt -url http://ocsp.iceberglocal:9999 -resp_text
 
 .PHONY: ocsp_revoke_server
 ocsp_revoke_server:  ## Revoke server certificate with OCSP
