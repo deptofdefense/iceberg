@@ -15,8 +15,10 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -169,8 +171,10 @@ const (
 	//
 	flagBehaviorNotFound = "behavior-not-found"
 	//
-	flagLogPath = "log"
+	flagLogPath    = "log"
+	flagKeyLogPath = "keylog"
 	//
+	flagUnsafe = "unsafe"
 	flagDryRun = "dry-run"
 	//
 	// Flags used by simulate request command
@@ -199,10 +203,12 @@ func initFlags(flag *pflag.FlagSet) {
 	flag.StringP(flagRootPath, "r", "", "path to the document root served")
 	flag.StringP(flagTemplatePath, "t", "", "path to the template file used during directory listing")
 	flag.StringP(flagLogPath, "l", "-", "path to the log output.  Defaults to stdout.")
+	flag.String(flagKeyLogPath, "", "path to the key log output.  Also requires unsafe flag.")
 	flag.String(flagBehaviorNotFound, BehaviorNone, "default behavior when a file is not found.  One of: "+strings.Join(Behaviors, ","))
 	initAccessPolicyFlags(flag)
 	initTimeoutFlags(flag)
 	initTLSFlags(flag)
+	flag.Bool(flagUnsafe, false, "allow unsafe configuration")
 	flag.Bool(flagDryRun, false, "exit after checking configuration")
 }
 
@@ -432,6 +438,25 @@ func initLogger(path string) (*log.SimpleLogger, error) {
 	return log.NewSimpleLogger(f), nil
 }
 
+func initKeyLogger(path string, unsafe bool) (io.Writer, error) {
+
+	// if path is not defined or unsafe is not set, then return nil
+	if len(path) == 0 || !unsafe {
+		return nil, nil
+	}
+
+	if path == "-" {
+		return nil, errors.New("stdout is not supported for key log")
+	}
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("error opening key log file %q: %w", path, err)
+	}
+
+	return f, nil
+}
+
 func getTLSVersion(r *http.Request) string {
 	for k, v := range TLSVersionIdentifiers {
 		if v == r.TLS.Version {
@@ -507,7 +532,7 @@ func initCertificateRevocationLists(p string, format string) (map[string][]pkix.
 	return nil, fmt.Errorf("error parsing CRL from file %q: unknown format %q", p, format)
 }
 
-func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x509.CertPool, minVersion string, maxVersion string, cipherSuites []uint16, tlsPreferServerCipherSuites bool) *tls.Config {
+func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x509.CertPool, minVersion string, maxVersion string, cipherSuites []uint16, tlsPreferServerCipherSuites bool, keyLogger io.Writer) *tls.Config {
 
 	config := &tls.Config{
 		Certificates:             []tls.Certificate{serverKeyPair},
@@ -516,6 +541,7 @@ func initTLSConfig(v *viper.Viper, serverKeyPair tls.Certificate, clientCAs *x50
 		MinVersion:               TLSVersionIdentifiers[minVersion],
 		MaxVersion:               TLSVersionIdentifiers[maxVersion],
 		PreferServerCipherSuites: tlsPreferServerCipherSuites,
+		KeyLogWriter:             keyLogger,
 	}
 	if len(cipherSuites) > 0 {
 		config.CipherSuites = cipherSuites
@@ -707,6 +733,26 @@ func main() {
 				return fmt.Errorf("error initializing logger: %w", err)
 			}
 
+			unsafe := v.GetBool(flagUnsafe)
+
+			if unsafe {
+				_ = logger.Log("Unsafe configuration allowed", map[string]interface{}{
+					"unsafe": unsafe,
+				})
+			}
+
+			keyLogger, err := initKeyLogger(v.GetString(flagKeyLogPath), unsafe)
+			if err != nil {
+				return fmt.Errorf("error initializing key logger: %w", err)
+			}
+
+			if keyLogger != nil {
+				_ = logger.Log("Logging TLS keys", map[string]interface{}{
+					"unsafe": unsafe,
+					"path":   v.GetString(flagKeyLogPath),
+				})
+			}
+
 			listenAddress := v.GetString(flagListenAddr)
 			redirectAddress := v.GetString(flagRedirectAddr)
 			publicLocation := v.GetString(flagPublicLocation)
@@ -759,7 +805,7 @@ func main() {
 				return fmt.Errorf("error initializing certificate revocation lists: %w", err)
 			}
 
-			tlsConfig := initTLSConfig(v, serverKeyPair, clientCAs, tlsMinVersion, tlsMaxVersion, cipherSuites, tlsPreferServerCipherSuites)
+			tlsConfig := initTLSConfig(v, serverKeyPair, clientCAs, tlsMinVersion, tlsMaxVersion, cipherSuites, tlsPreferServerCipherSuites, keyLogger)
 
 			redirectNotFound := v.GetString(flagBehaviorNotFound) == BehaviorRedirect
 
