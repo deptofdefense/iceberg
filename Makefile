@@ -74,6 +74,21 @@ build_release: bin/gox
 	scripts/build-release
 
 #
+# Local
+#
+
+serve_example: bin/iceberg temp/ca.crt temp/server.crt   ## Serve using local binary
+	bin/iceberg serve \
+	--addr :8080 \
+	--server-cert temp/server.crt \
+	--server-key temp/server.key \
+	--client-ca temp/ca.crt \
+	--client-ca-format pem \
+	--root examples/public \
+	--template examples/conf/template.html \
+	--access-policy examples/conf/example.json
+
+#
 # Docker
 #
 
