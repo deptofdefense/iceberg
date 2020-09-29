@@ -21,36 +21,38 @@ Usage:
   iceberg serve [flags]
 
 Flags:
--p, --access-policy string              path to the policy file.
--f, --access-policy-format string       format of the policy file (default "json")
--a, --addr string                       address that iceberg will listen on (default ":8080")
-    --behavior-not-found string         default behavior when a file is not found.  One of: redirect,none (default "none")
-    --client-ca string                  path to CA bundle for client authentication
-    --client-ca-format string           format of the CA bundle for client authentication, either pkcs7 or pem (default "pkcs7")
-    --client-crl string                 path to CRL bundle for client authentication
-    --client-crl-format string          format of the CRL bundle for client authentication, either der, der.zip, or pem (default "der")
-    --dry-run                           exit after checking configuration
--h, --help                              help for serve
--l, --log string                        path to the log output.  Defaults to stdout. (default "-")
-    --ocsp-http-timeout duration        the maximum amount of time before OCSP http requests timeout (default 30s)
-    --ocsp-refresh-min duration         the minimum amount of time to wait before a refresh can occur (default 5m0s)
-    --ocsp-refresh-ratio float          the amount of time to wait for renewal between OCSP production and next update (default 0.8)
-    --ocsp-renew-interval duration      interval to run OCSP renewal (default 5m0s)
-    --ocsp-server                       enable OCSP checking on the server certificate
-    --public-location string            the public location of the server used for redirects
-    --redirect string                   address that iceberg will listen to and redirect requests to the public location
--r, --root string                       path to the document root served
-    --server-cert string                path to server public cert
-    --server-key string                 path to server private key
--t, --template string                   path to the template file used during directory listing
-    --timeout-idle string               maximum amount of time to wait for the next request when keep-alives are enabled (default "5m")
-    --timeout-read string               maximum duration for reading the entire request (default "15m")
-    --timeout-write string              maximum duration before timing out writes of the response (default "5m")
-    --tls-cipher-suites string          list of supported cipher suites for TLS versions up to 1.2 (TLS 1.3 is not configureable)
-    --tls-curve-preferences string      curve preferences (default "X25519,CurveP256,CurveP384,CurveP521")
-    --tls-max-version string            maximum TLS version accepted for requests (default "1.3")
-    --tls-min-version string            minimum TLS version accepted for requests (default "1.0")
-    --tls-prefer-server-cipher-suites   prefer server cipher suites
+  -p, --access-policy string              path to the policy file.
+  -f, --access-policy-format string       format of the policy file (default "json")
+  -a, --addr string                       address that iceberg will listen on (default ":8080")
+      --behavior-not-found string         default behavior when a file is not found.  One of: redirect,none (default "none")
+      --client-ca string                  path to CA bundle for client authentication
+      --client-ca-format string           format of the CA bundle for client authentication, either pkcs7 or pem (default "pkcs7")
+      --client-crl string                 path to CRL bundle for client authentication
+      --client-crl-format string          format of the CRL bundle for client authentication, either der, der.zip, or pem (default "der")
+      --dry-run                           exit after checking configuration
+  -h, --help                              help for serve
+      --keylog string                     path to the key log output.  Also requires unsafe flag.
+  -l, --log string                        path to the log output.  Defaults to stdout. (default "-")
+      --ocsp-http-timeout duration        the maximum amount of time before OCSP http requests timeout (default 30s)
+      --ocsp-refresh-min duration         the minimum amount of time to wait before a refresh can occur (default 5m0s)
+      --ocsp-refresh-ratio float          the amount of time to wait for renewal between OCSP production and next update (default 0.8)
+      --ocsp-renew-interval duration      interval to run OCSP renewal (default 5m0s)
+      --ocsp-server                       enable OCSP checking on the server certificate
+      --public-location string            the public location of the server used for redirects
+      --redirect string                   address that iceberg will listen to and redirect requests to the public location
+  -r, --root string                       path to the document root served
+      --server-cert string                path to server public cert
+      --server-key string                 path to server private key
+  -t, --template string                   path to the template file used during directory listing
+      --timeout-idle string               maximum amount of time to wait for the next request when keep-alives are enabled (default "5m")
+      --timeout-read string               maximum duration for reading the entire request (default "15m")
+      --timeout-write string              maximum duration before timing out writes of the response (default "5m")
+      --tls-cipher-suites string          list of supported cipher suites for TLS versions up to 1.2 (TLS 1.3 is not configureable)
+      --tls-curve-preferences string      curve preferences (default "X25519,CurveP256,CurveP384,CurveP521")
+      --tls-max-version string            maximum TLS version accepted for requests (default "1.3")
+      --tls-min-version string            minimum TLS version accepted for requests (default "1.0")
+      --tls-prefer-server-cipher-suites   prefer server cipher suites
+      --unsafe                            allow unsafe configuration
 ```
 
 ### Network Encryption
@@ -272,6 +274,7 @@ so select the "OK" button immediately.
 
 Now you may browse to the website at <https://iceberglocal:8080>.
 
+<<<<<<< HEAD
 ## Certificate Revocation
 
 ### CRL
@@ -394,6 +397,11 @@ And check response:
 ```sh
 make ocsp_check_client_response
 ```
+=======
+### Key Logging
+
+Key logging should only be used in development since it compromises the security of TLS.  You can output TLS master secrets in the [NSS Key Log Format](https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/Key_Log_Format) by using the `--unsafe` and `--keylog KEYLOG` flags.  The newly created file can be used by [Wireshark](https://wiki.wireshark.org/TLS) or other applications to decrypt TLS traffic.
+>>>>>>> e05f783788847360abada15c08a230725c676ca9
 
 ## Contributing
 

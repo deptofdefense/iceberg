@@ -193,6 +193,7 @@ const (
 	flagLogPath    = "log"
 	flagKeyLogPath = "keylog"
 	//
+	flagUnsafe = "unsafe"
 	flagDryRun = "dry-run"
 	//
 	// Flags used by simulate request command
@@ -221,12 +222,13 @@ func initFlags(flag *pflag.FlagSet) {
 	flag.StringP(flagRootPath, "r", "", "path to the document root served")
 	flag.StringP(flagTemplatePath, "t", "", "path to the template file used during directory listing")
 	flag.StringP(flagLogPath, "l", "-", "path to the log output.  Defaults to stdout.")
-	flag.String(flagKeyLogPath, "", "path to the key log output")
+	flag.String(flagKeyLogPath, "", "path to the key log output.  Also requires unsafe flag.")
 	flag.String(flagBehaviorNotFound, BehaviorNone, "default behavior when a file is not found.  One of: "+strings.Join(Behaviors, ","))
 	initAccessPolicyFlags(flag)
 	initTimeoutFlags(flag)
 	initTLSFlags(flag)
 	initOCSPFlags(flag)
+	flag.Bool(flagUnsafe, false, "allow unsafe configuration")
 	flag.Bool(flagDryRun, false, "exit after checking configuration")
 }
 
@@ -485,9 +487,10 @@ func initLogger(path string) (*log.SimpleLogger, error) {
 	return log.NewSimpleLogger(f), nil
 }
 
-func initKeyLogger(path string) (io.Writer, error) {
+func initKeyLogger(path string, unsafe bool) (io.Writer, error) {
 
-	if len(path) == 0 {
+	// if path is not defined or unsafe is not set, then return nil
+	if len(path) == 0 || !unsafe {
 		return nil, nil
 	}
 
@@ -845,9 +848,24 @@ func main() {
 				return fmt.Errorf("error initializing logger: %w", err)
 			}
 
-			keyLogger, err := initKeyLogger(v.GetString(flagKeyLogPath))
+			unsafe := v.GetBool(flagUnsafe)
+
+			if unsafe {
+				_ = logger.Log("Unsafe configuration allowed", map[string]interface{}{
+					"unsafe": unsafe,
+				})
+			}
+
+			keyLogger, err := initKeyLogger(v.GetString(flagKeyLogPath), unsafe)
 			if err != nil {
 				return fmt.Errorf("error initializing key logger: %w", err)
+			}
+
+			if keyLogger != nil {
+				_ = logger.Log("Logging TLS keys", map[string]interface{}{
+					"unsafe": unsafe,
+					"path":   v.GetString(flagKeyLogPath),
+				})
 			}
 
 			listenAddress := v.GetString(flagListenAddr)

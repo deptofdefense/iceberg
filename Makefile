@@ -77,34 +77,31 @@ build_release: bin/gox
 # Local
 #
 
-# Use this for OCSP testing because OCSP responder runs on local host
-serve_example: bin/iceberg  ## Serve using local binary
+serve_example: bin/iceberg temp/ca.crt temp/server.crt   ## Serve using local binary
 	bin/iceberg serve \
 	--addr :8080 \
-	--server-cert ./temp/server.crt \
-	--server-key ./temp/server.key \
-	--client-ca ./temp/ca.crt \
+	--server-cert temp/server.crt \
+	--server-key temp/server.key \
+	--client-ca temp/ca.crt \
 	--client-ca-format pem \
-	--root ./examples/public \
-	--template ./examples/conf/template.html \
-	--access-policy ./examples/conf/example.json
+	--root examples/public \
+	--template examples/conf/template.html \
+	--access-policy examples/conf/example.json
 
-# Use this for OCSP testing because OCSP responder runs on local host
-serve_example_ocsp: bin/iceberg  ## Serve using local binary
+serve_example_ocsp: bin/iceberg temp/ca.crt temp/server.crt  ## Serve using local binary with OCSP stapling
 	bin/iceberg serve \
 	--addr :8080 \
 	--server-cert ./temp/server.crt \
 	--server-key ./temp/server.key \
 	--client-ca ./temp/ca.crt \
 	--client-ca-format pem \
-	--ocsp-http-timeout 2s \
-	--ocsp-refresh-min 1m \
-	--ocsp-renew-interval 10s \
-	--ocsp-server \
 	--root ./examples/public \
 	--template ./examples/conf/template.html \
 	--access-policy ./examples/conf/example.json \
-	--keylog ./temp/keylog
+	--ocsp-http-timeout 2s \
+	--ocsp-refresh-min 1m \
+	--ocsp-renew-interval 10s \
+	--ocsp-server
 
 #
 # Docker
