@@ -274,7 +274,10 @@ so select the "OK" button immediately.
 
 Now you may browse to the website at <https://iceberglocal:8080>.
 
-<<<<<<< HEAD
+### Key Logging
+
+Key logging should only be used in development since it compromises the security of TLS.  You can output TLS master secrets in the [NSS Key Log Format](https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/Key_Log_Format) by using the `--unsafe` and `--keylog KEYLOG` flags.  The newly created file can be used by [Wireshark](https://wiki.wireshark.org/TLS) or other applications to decrypt TLS traffic.
+
 ## Certificate Revocation
 
 ### CRL
@@ -397,11 +400,6 @@ And check response:
 ```sh
 make ocsp_check_client_response
 ```
-=======
-### Key Logging
-
-Key logging should only be used in development since it compromises the security of TLS.  You can output TLS master secrets in the [NSS Key Log Format](https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/Key_Log_Format) by using the `--unsafe` and `--keylog KEYLOG` flags.  The newly created file can be used by [Wireshark](https://wiki.wireshark.org/TLS) or other applications to decrypt TLS traffic.
->>>>>>> e05f783788847360abada15c08a230725c676ca9
 
 ## Contributing
 
