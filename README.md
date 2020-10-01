@@ -278,17 +278,11 @@ Now you may browse to the website at <https://iceberglocal:8080>.
 
 Key logging should only be used in development since it compromises the security of TLS.  You can output TLS master secrets in the [NSS Key Log Format](https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/Key_Log_Format) by using the `--unsafe` and `--keylog KEYLOG` flags.  The newly created file can be used by [Wireshark](https://wiki.wireshark.org/TLS) or other applications to decrypt TLS traffic.
 
-## Certificate Revocation
-
-### CRL
-
-TBD
-
-### OCSP
+### OCSP Stapling
 
 **NOTE:** At this time this will not work with Docker.
 
-OCSP is the preferred method of managing certificate revocation. In order to work with OCSP you first need to create OCSP certificate and key pair in order to run an OCSP responder server with OpenSSL. Additionally you'll need a server or client key to verify.
+OCSP is the preferred method of managing certificate revocation as certificate revocation lists can get outdated and quite large.  OCSP stapling embeds an OCSP response in the TLS Server Hello to remove the need for the client to contact the OCSP responder separately.  In order to work with OCSP you first need to create OCSP certificate and key pair in order to run an OCSP responder server with OpenSSL. Additionally you'll need a server or client key to verify.
 
 Start by ensuring all certs are renewed:
 
@@ -351,7 +345,7 @@ temp/server.crt: unknown
 Run the server now:
 
 ```sh
-rm bin/iceberg && make bin/iceberg serve_example
+rm bin/iceberg && make bin/iceberg serve_example_ocsp
 ```
 
 Get a file to show things are working and check that the OCSP responder was connected to:
@@ -372,7 +366,7 @@ Now revoke the server:
 make ocsp_revoke_server
 ```
 
-Validate the server certificate was revoked with:
+Restart the responder and then validate the server certificate was revoked with:
 
 ```sh
 make ocsp_validate_server
@@ -395,7 +389,7 @@ And run again:
 make check_client_response
 ```
 
-And check response:
+Since the certificate was revoked, iceberg will not return the staple.  Check the response:
 
 ```sh
 make ocsp_check_client_response

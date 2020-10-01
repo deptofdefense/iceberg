@@ -65,15 +65,6 @@ func (renewer *OCSPRenewer) GetFirstServer() string {
 func (renewer *OCSPRenewer) ShouldRenew() bool {
 
 	if renewer.staple != nil {
-		// ThisUpdate: latest time known to have been good
-		// ProducedAt: response generated
-		// NextUpdate: expiration
-		// RevokedAt: revocation time
-		// fmt.Printf("ThisUpdate: [%s]\tProducedAt: [%s]\tNextUpdate: [%s]\tRevokedAt: [%s]\n",
-		// 	renewer.staple.ThisUpdate,
-		// 	renewer.staple.ProducedAt,
-		// 	renewer.staple.NextUpdate,
-		// 	renewer.staple.RevokedAt)
 
 		// Do not renew if certificate has been revoked
 		if !renewer.staple.RevokedAt.IsZero() {

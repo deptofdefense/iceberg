@@ -202,7 +202,6 @@ check_client_response:  ## Check that the client will respond
 .PHONY: ocsp_check_client_response
 ocsp_check_client_response:  ## Check the ocsp client response
 	curl --tlsv1.2 -S --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt --cert-status https://iceberglocal:8080/index.html -v
-	# openssl s_client -connect iceberglocal:8080 -tls1_2 -CAfile temp/ca.crt -cert temp/client.crt -key temp/client.key -status
 
 ## Clean
 
