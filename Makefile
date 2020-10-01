@@ -7,7 +7,7 @@
 
 .PHONY: help
 help:  ## Print the help documentation
-	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[\/a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 #
 # Go building, formatting, testing, and installing
@@ -88,6 +88,21 @@ serve_example: bin/iceberg temp/ca.crt temp/server.crt   ## Serve using local bi
 	--template examples/conf/template.html \
 	--access-policy examples/conf/example.json
 
+serve_example_ocsp: bin/iceberg temp/ca.crt temp/server.crt  ## Serve using local binary with OCSP stapling
+	bin/iceberg serve \
+	--addr :8080 \
+	--server-cert ./temp/server.crt \
+	--server-key ./temp/server.key \
+	--client-ca ./temp/ca.crt \
+	--client-ca-format pem \
+	--root ./examples/public \
+	--template ./examples/conf/template.html \
+	--access-policy ./examples/conf/example.json \
+	--ocsp-http-timeout 2s \
+	--ocsp-refresh-min 1m \
+	--ocsp-renew-interval 10s \
+	--ocsp-server
+
 #
 # Docker
 #
@@ -112,7 +127,7 @@ docker_serve_example: temp/ca.crt temp/server.crt ## Serve using docker server i
 
 temp/ca.crt:
 	mkdir -p temp
-	openssl req -x509 -nodes -days 365 -newkey rsa:2048 -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/CN=icebergca" -keyout temp/ca.key -out temp/ca.crt
+	openssl req -batch -x509 -nodes -days 365 -newkey rsa:2048 -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/CN=icebergca" -keyout temp/ca.key -out temp/ca.crt
 
 temp/ca.srl:
 	echo '01' > temp/ca.srl
@@ -124,7 +139,7 @@ temp/index.txt.attr:
 	echo 'unique_subject = yes' > temp/index.txt.attr
 
 temp/ca.crl.pem: temp/ca.crt temp/index.txt temp/index.txt.attr
-	openssl ca -gencrl -config examples/conf/openssl.cnf -out temp/ca.crl.pem
+	openssl ca -batch -gencrl -config examples/conf/openssl.cnf -out temp/ca.crl.pem
 
 temp/ca.crl.der: temp/ca.crl.pem
 	openssl crl -in temp/ca.crl.pem -outform DER -out temp/ca.crl.der
@@ -132,27 +147,61 @@ temp/ca.crl.der: temp/ca.crl.pem
 temp/server.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
 	mkdir -p temp
 	openssl genrsa -out temp/server.key 2048
-	openssl req -new -key temp/server.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/CN=iceberglocal" -out temp/server.csr
-	openssl ca -config examples/conf/openssl.cnf -batch -notext -in temp/server.csr -out temp/server.crt
+	openssl req -new -config examples/conf/openssl.cnf -key temp/server.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/CN=iceberglocal" -out temp/server.csr
+	openssl ca -batch -config examples/conf/openssl.cnf -extensions server_ext -notext -in temp/server.csr -out temp/server.crt
 
 temp/client.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
 	mkdir -p temp
 	openssl genrsa -out temp/client.key 2048
 	openssl req -new -key temp/client.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/OU=CONTRACTOR/CN=LAST.FIRST.MIDDLE.ID" -out temp/client.csr
-	openssl ca -config examples/conf/openssl.cnf -notext -in temp/client.csr -out temp/client.crt
+	openssl ca -batch -config examples/conf/openssl.cnf -extensions client_ext -notext -in temp/client.csr -out temp/client.crt
 
 temp/client.p12: temp/ca.crt temp/client.crt
 	mkdir -p temp
 	openssl pkcs12 -export -out temp/client.p12 -inkey temp/client.key -in temp/client.crt -certfile temp/ca.crt -passout pass:
 
 .PHONY: crl
-crl:
+crl:  ## Create the Certificate Revocation List
 	rm -f temp/ca.crl.pem temp/ca.crl.der
 	make temp/ca.crl.der
 
-.PHONY: revoke
-revoke:
-	openssl ca -config examples/conf/openssl.cnf -cert temp/ca.crt -keyfile temp/ca.key -revoke temp/client.crt
+.PHONY: crl_revoke_client
+crl_revoke_client:  ## Revoke client certificate with CRL
+	openssl ca -batch -config examples/conf/openssl.cnf -cert temp/ca.crt -keyfile temp/ca.key -revoke temp/client.crt
+
+temp/ocsp.crt: temp/ca.crt temp/ca.srl temp/index.txt temp/index.txt.attr
+	mkdir -p temp
+	openssl genrsa -out temp/ocsp.key 2048
+	openssl req -new -key temp/ocsp.key -subj "/C=US/O=Atlantis/OU=Atlantis Digital Service/OU=OCSP/CN=ocsp.iceberglocal" -out temp/ocsp.csr
+	openssl ca -batch -config examples/conf/openssl.cnf -extensions ocsp_ext -notext -in temp/ocsp.csr -out temp/ocsp.crt
+
+.PHONY: ocsp_responder
+ocsp_responder:  ## Start an OCSP Responder server
+	openssl ocsp -index temp/index.txt -port 9999 -rsigner temp/ocsp.crt -rkey temp/ocsp.key -CA temp/ca.crt -text -out temp/ocsp.log -nmin 5
+
+.PHONY: ocsp_validate_server
+ocsp_validate_server:  ## Validate server certificate with OCSP
+	openssl ocsp -CAfile temp/ca.crt -VAfile temp/ocsp.crt -issuer temp/ca.crt -cert temp/server.crt -url http://ocsp.iceberglocal:9999 -resp_text
+
+.PHONY: ocsp_validate_client
+ocsp_validate_client:  ## Validate client certificate with OCSP
+	openssl ocsp -CAfile temp/ca.crt -VAfile temp/ocsp.crt -issuer temp/ca.crt -cert temp/client.crt -url http://ocsp.iceberglocal:9999 -resp_text
+
+.PHONY: ocsp_revoke_server
+ocsp_revoke_server:  ## Revoke server certificate with OCSP
+	openssl ca -batch -config examples/conf/openssl.cnf -cert temp/ca.crt -keyfile temp/ca.key -revoke temp/server.crt
+
+.PHONY: ocsp_revoke_client
+ocsp_revoke_client:  ## Revoke client certificate with OCSP
+	openssl ca -batch -config examples/conf/openssl.cnf -cert temp/ca.crt -keyfile temp/ca.key -revoke temp/client.crt
+
+.PHONY: ocsp_check_client_response
+check_client_response:  ## Check that the client will respond
+	curl --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt https://iceberglocal:8080/index.html
+
+.PHONY: ocsp_check_client_response
+ocsp_check_client_response:  ## Check the ocsp client response
+	curl --tlsv1.2 -S --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt --cert-status https://iceberglocal:8080/index.html -v
 
 ## Clean
 

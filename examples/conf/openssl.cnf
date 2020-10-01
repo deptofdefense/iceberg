@@ -37,7 +37,8 @@ emailAddress           = optional
 #default_keyfile 	= privkey.pem
 distinguished_name	= req_distinguished_name
 attributes		= req_attributes
-req_extensions         = v3_ca
+#req_extensions         = v3_ca
+#req_extensions = v3_ca
 
 [ req_distinguished_name ]
 countryName			= Country Name (2 letter code)
@@ -56,3 +57,23 @@ emailAddress_max		= 64
 challengePassword		= A challenge password
 challengePassword_min		= 4
 challengePassword_max		= 20
+
+[ client_ext ]
+basicConstraints = critical, CA:false
+keyUsage = critical,digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+
+[ server_ext ]
+basicConstraints = critical, CA:false
+keyUsage = critical,digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+authorityInfoAccess = OCSP;URI:http://ocsp.iceberglocal:9999
+subjectAltName = @alt_names
+
+[ alt_names ]
+DNS.1 = iceberglocal
+
+[ ocsp_ext ]
+basicConstraints = critical, CA:false
+keyUsage = critical,digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth, OCSPSigning

@@ -1,0 +1,17 @@
+repos:
+    - repo: git://github.com/golangci/golangci-lint
+      rev: v1.31.0
+      hooks:
+        - id: golangci-lint
+
+    - repo: git://github.com/pre-commit/pre-commit-hooks
+      rev: v3.2.0
+      hooks:
+        - id: check-merge-conflict
+        - id: check-yaml
+        - id: trailing-whitespace
+
+    - repo: git://github.com/igorshubovych/markdownlint-cli
+      rev: v0.23.2
+      hooks:
+        - id: markdownlint

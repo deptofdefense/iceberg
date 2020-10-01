@@ -33,6 +33,11 @@ Flags:
   -h, --help                              help for serve
       --keylog string                     path to the key log output.  Also requires unsafe flag.
   -l, --log string                        path to the log output.  Defaults to stdout. (default "-")
+      --ocsp-http-timeout duration        the maximum amount of time before OCSP http requests timeout (default 30s)
+      --ocsp-refresh-min duration         the minimum amount of time to wait before a refresh can occur (default 5m0s)
+      --ocsp-refresh-ratio float          the amount of time to wait for renewal between OCSP production and next update (default 0.8)
+      --ocsp-renew-interval duration      interval to run OCSP renewal (default 5m0s)
+      --ocsp-server                       enable OCSP checking on the server certificate
       --public-location string            the public location of the server used for redirects
       --redirect string                   address that iceberg will listen to and redirect requests to the public location
   -r, --root string                       path to the document root served
@@ -272,6 +277,123 @@ Now you may browse to the website at <https://iceberglocal:8080>.
 ### Key Logging
 
 Key logging should only be used in development since it compromises the security of TLS.  You can output TLS master secrets in the [NSS Key Log Format](https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/Key_Log_Format) by using the `--unsafe` and `--keylog KEYLOG` flags.  The newly created file can be used by [Wireshark](https://wiki.wireshark.org/TLS) or other applications to decrypt TLS traffic.
+
+### OCSP Stapling
+
+**NOTE:** At this time this will not work with Docker.
+
+OCSP is the preferred method of managing certificate revocation as certificate revocation lists can get outdated and quite large.  OCSP stapling embeds an OCSP response in the TLS Server Hello to remove the need for the client to contact the OCSP responder separately.  In order to work with OCSP you first need to create OCSP certificate and key pair in order to run an OCSP responder server with OpenSSL. Additionally you'll need a server or client key to verify.
+
+Start by ensuring all certs are renewed:
+
+```sh
+rm -rf temp && make temp/ca.crt temp/ocsp.crt temp/client.p12 temp/server.crt
+```
+
+Now turn on the OCSP Responder server in another terminal instance:
+
+```sh
+make ocsp_responder
+```
+
+Verify the OCSP server information is on the client certificate with:
+
+```sh
+openssl x509 -in temp/client.crt -text -noout
+```
+
+A section that looks like this should appear:
+
+```text
+        X509v3 extensions:
+            Authority Information Access:
+                OCSP - URI:http://127.0.0.1:9999
+```
+
+Validate the client certificate with:
+
+```sh
+make ocsp_validate_client
+```
+
+You will see a response like:
+
+```text
+...
+Response verify OK
+temp/client.crt: unknown
+        This Update: Sep 22 22:06:51 2020 GMT
+        Next Update: Sep 22 22:11:51 2020 GMT
+```
+
+Validate the server certificate with:
+
+```sh
+make ocsp_validate_server
+```
+
+You will see a response like:
+
+```text
+...
+Response verify OK
+temp/server.crt: unknown
+        This Update: Sep 22 22:06:51 2020 GMT
+        Next Update: Sep 22 22:11:51 2020 GMT
+```
+
+Run the server now:
+
+```sh
+rm bin/iceberg && make bin/iceberg serve_example_ocsp
+```
+
+Get a file to show things are working and check that the OCSP responder was connected to:
+
+```sh
+make check_client_response
+```
+
+Check the OCSP response:
+
+```sh
+make ocsp_check_client_response
+```
+
+Now revoke the server:
+
+```sh
+make ocsp_revoke_server
+```
+
+Restart the responder and then validate the server certificate was revoked with:
+
+```sh
+make ocsp_validate_server
+```
+
+Check for output that has the `Revocation Time`:
+
+```text
+...
+Response verify OK
+temp/server.crt: revoked
+        This Update: Sep 22 21:52:29 2020 GMT
+        Next Update: Sep 22 21:57:29 2020 GMT
+        Revocation Time: Sep 22 21:52:11 2020 GMT
+```
+
+And run again:
+
+```sh
+make check_client_response
+```
+
+Since the certificate was revoked, iceberg will not return the staple.  Check the response:
+
+```sh
+make ocsp_check_client_response
+```
 
 ## Contributing
 
