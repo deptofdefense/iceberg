@@ -48,6 +48,7 @@ jobs:
           docker_layer_caching: false
       - run: make tidy
       - run: make bin/iceberg
+      - run: make temp/server.crt temp/ca.crl.der
       - run: make test_cli
 
   # `build` builds the executables and libraries.
