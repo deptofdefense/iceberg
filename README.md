@@ -47,7 +47,7 @@ Flags:
       --timeout-idle string               maximum amount of time to wait for the next request when keep-alives are enabled (default "5m")
       --timeout-read string               maximum duration for reading the entire request (default "15m")
       --timeout-write string              maximum duration before timing out writes of the response (default "5m")
-      --tls-cipher-suites string          list of supported cipher suites for TLS versions up to 1.2 (TLS 1.3 is not configureable)
+      --tls-cipher-suites string          list of supported cipher suites for TLS versions up to 1.2 (TLS 1.3 is not configurable)
       --tls-curve-preferences string      curve preferences (default "X25519,CurveP256,CurveP384,CurveP521")
       --tls-max-version string            maximum TLS version accepted for requests (default "1.3")
       --tls-min-version string            minimum TLS version accepted for requests (default "1.0")
@@ -263,7 +263,7 @@ curl --cacert ./temp/ca.crt --key ./temp/client.key --cert ./temp/client.crt htt
 ### Firefox
 
 You may consider using a web browser to view the files. In this case you need to load the Certificate Authority and identity file
-into the firefox Certificate Manager. Browse to "about:preferences#privacy" and search for the section labelled "Certificates".
+into the firefox Certificate Manager. Browse to "about:preferences#privacy" and search for the section labeled "Certificates".
 Use the "View Certificates" button to open the Certificate Manager.
 
 In the "Authorities" tab use the "Import..." button to load the `temp/ca.crt` file.  When asked select
@@ -394,6 +394,20 @@ Since the certificate was revoked, iceberg will not return the staple.  Check th
 ```sh
 make ocsp_check_client_response
 ```
+
+## Testing
+
+**CLI**
+
+To run CLI testes use `make test_cli`, which uses [shUnit2](https://github.com/kward/shunit2).  If you recive a `shunit2:FATAL Please declare TMPDIR with path on partition with exec permission.` error, you can modify the `TMPDIR` environment variable in line or with `export TMPDIR=<YOUR TEMP DIRECTORY HERE>`. For example:
+
+```shell
+TMPDIR="/usr/local/tmp" make test_cli
+```
+
+**Go**
+
+To run Go tests use `make test_go` (or `bash scripts/test.sh`), which runs unit tests, `go vet`, `go vet with shadow`, [errcheck](https://github.com/kisielk/errcheck), [staticcheck](https://staticcheck.io/), and [misspell](https://github.com/client9/misspell).
 
 ## Contributing
 

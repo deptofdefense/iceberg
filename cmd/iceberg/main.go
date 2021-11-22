@@ -247,7 +247,7 @@ func initTimeoutFlags(flag *pflag.FlagSet) {
 func initTLSFlags(flag *pflag.FlagSet) {
 	flag.String(flagTLSMinVersion, TLSVersion1_0, "minimum TLS version accepted for requests")
 	flag.String(flagTLSMaxVersion, TLSVersion1_3, "maximum TLS version accepted for requests")
-	flag.String(flagTLSCipherSuites, "", "list of supported cipher suites for TLS versions up to 1.2 (TLS 1.3 is not configureable)")
+	flag.String(flagTLSCipherSuites, "", "list of supported cipher suites for TLS versions up to 1.2 (TLS 1.3 is not configurable)")
 	flag.String(flagTLSCurvePreferences, strings.Join(DefaultCurveIDs, ","), "curve preferences")
 	flag.Bool(flagTLSPreferServerCipherSuites, false, "prefer server cipher suites")
 }
