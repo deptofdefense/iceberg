@@ -4,14 +4,21 @@ repos:
       hooks:
         - id: golangci-lint
 
-    - repo: git://github.com/pre-commit/pre-commit-hooks
-      rev: v3.2.0
-      hooks:
-        - id: check-merge-conflict
-        - id: check-yaml
-        - id: trailing-whitespace
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.0.1
+    hooks:
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: detect-private-key
+      - id: pretty-format-json
+        args:
+          - --autofix
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, master, --pattern, '\d\.\d\.\d']
+      - id: trailing-whitespace
 
-    - repo: git://github.com/igorshubovych/markdownlint-cli
-      rev: v0.23.2
-      hooks:
-        - id: markdownlint
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.28.1
+    hooks:
+      - id: markdownlint

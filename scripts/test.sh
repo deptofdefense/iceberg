@@ -28,8 +28,8 @@ echo "******************"
 echo "Running errcheck"
 bin/errcheck ${pkgs}
 echo "******************"
-echo "Running ineffassign"
-find . -name '*.go' | xargs bin/ineffassign
-echo "******************"
 echo "Running staticcheck"
 bin/staticcheck -checks all ${pkgs}
+echo "******************"
+echo "Running misspell"
+bin/misspell -locale US -error *.md *.go

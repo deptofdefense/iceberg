@@ -18,24 +18,24 @@ fmt:  ## Format Go source code
 
 .PHONY: imports
 imports: bin/goimports ## Update imports in Go source code
-	# If missing, install goimports with: go get golang.org/x/tools/cmd/goimports
 	bin/goimports -w -local github.com/deptofdefense/iceberg,github.com/deptofdefense $$(find . -iname '*.go')
 
 vet: ## Vet Go source code
-	go vet $$(go list ./...)
+	go vet github.com/deptofdefense/iceberg/pkg/... # vet packages
+	go vet github.com/deptofdefense/iceberg/cmd/... # vet commands
 
 tidy: ## Tidy Go source code
 	go mod tidy
 
 .PHONY: test_go
-test_go: bin/errcheck bin/ineffassign bin/staticcheck bin/shadow ## Run Go tests
+test_go: bin/errcheck bin/misspell bin/staticcheck bin/shadow ## Run Go tests
 	bash scripts/test.sh
 
 .PHONY: test_cli
-test_cli: bin/iceberg temp/ca.crt temp/ca.crl.der temp/server.crt ## Run CLI tests
+test_cli: bin/iceberg ## Run CLI tests
 	bash scripts/test-cli.sh
 
-install:  ## Install iceberg CLI on current platform
+install:  ## Install the CLI on current platform
 	go install github.com/deptofdefense/iceberg/cmd/iceberg
 
 #
@@ -51,8 +51,8 @@ bin/goimports:
 bin/gox:
 	go build -o bin/gox github.com/mitchellh/gox
 
-bin/ineffassign:
-	go build -o bin/ineffassign github.com/gordonklaus/ineffassign
+bin/misspell:
+	go build -o bin/misspell github.com/client9/misspell/cmd/misspell
 
 bin/staticcheck:
 	go build -o bin/staticcheck honnef.co/go/tools/cmd/staticcheck
@@ -205,5 +205,6 @@ ocsp_check_client_response:  ## Check the ocsp client response
 
 ## Clean
 
+.PHONY: clean
 clean:  ## Clean artifacts
 	rm -fr bin

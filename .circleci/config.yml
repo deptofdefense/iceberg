@@ -1,20 +1,20 @@
 version: "2.1"
 
 executors:
-  # `main` uses the `cimg/go:1.14` docker image.
+  # `main` uses the `cimg/go:1.17` docker image.
   main:
     docker:
-      - image: cimg/go:1.14
+      - image: cimg/go:1.17
 
   # `base` uses the `cimg/base` docker image.
   base:
     docker:
       - image: cimg/base:2020.07
 
-  # `macos` uses the Windows machine image.
+  # `macos` uses the macOS machine image.
   macos:
     macos:
-      xcode: 11.5.0
+      xcode: 12.4.0
       resource_class: medium
 
   # `windows` uses the Windows machine image.
@@ -27,7 +27,7 @@ executors:
 
 jobs:
 
-  # `test_go` tests the iceberg source code.
+  # `test_go` tests the source code.
   test_go:
     executor: main
     steps:
@@ -39,7 +39,7 @@ jobs:
       - run: make test_go
       - run: git diff --exit-code
 
-  # `test_cli` builds the iceberg executable.
+  # `test_cli` tests the executable.
   test_cli:
     executor: main
     steps:
@@ -48,22 +48,26 @@ jobs:
           docker_layer_caching: false
       - run: make tidy
       - run: make bin/iceberg
-      - run: openssl rand --writerand ~/.rnd
-      - run: make temp/ca.crt
-      - run: make temp/server.crt
-      - run: make crl
       - run: make test_cli
 
-  # `build` builds the iceberg executable.
+  # `build` builds the executables and libraries.
   build:
     executor: main
     steps:
       - checkout
-      - setup_remote_docker:
-          docker_layer_caching: false
+
+      # Update apt cache
+      - run: sudo apt-get update
+
+      # Tidy dependencies
       - run: make tidy
+
+      # Build Executeables
       - run: make build_release
+
+      # Remove gox
       - run: rm -f bin/gox
+
       - store_artifacts:
           path: bin
           destination: /
@@ -71,8 +75,11 @@ jobs:
           root: bin
           paths:
             - iceberg_darwin_amd64
+            - iceberg_darwin_arm64
             - iceberg_linux_386
             - iceberg_linux_amd64
+            - iceberg_linux_arm
+            - iceberg_linux_arm64
             - iceberg_windows_386.exe
             - iceberg_windows_amd64.exe
 
@@ -85,7 +92,7 @@ jobs:
       - run: bin/iceberg_linux_386 --help
       - run: bin/iceberg_linux_amd64 --help
 
-  # `verify_macos` verifys the windows build
+  # `verify_macos` verifys the macOS build
   verify_macos:
     executor: macos
     steps:
@@ -101,7 +108,6 @@ jobs:
           at: bin
       - run: bin/iceberg_windows_386.exe --help
       - run: bin/iceberg_windows_amd64.exe --help
-
 
 workflows:
   version: 2
