@@ -51,7 +51,7 @@ jobs:
       - run: make temp/server.crt temp/ca.crl.der
       - run: make test_cli
 
-  # `build` builds the executables and libraries.
+  # `build` builds the executables
   build:
     executor: main
     steps:
