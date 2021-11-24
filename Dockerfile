@@ -1,5 +1,5 @@
 # build stage
-FROM golang:alpine AS builder
+FROM golang:alpine3.13 AS builder
 
 RUN apk update && apk add --no-cache git make gcc g++ ca-certificates && update-ca-certificates
 
@@ -7,9 +7,12 @@ WORKDIR /src
 
 COPY . .
 
-RUN make tidy
-
-RUN make bin/iceberg_linux_amd64
+RUN rm -f bin/gox bin/iceberg_linux_amd64 && make bin/gox && bin/gox \
+-os="linux" \
+-arch="amd64" \
+-ldflags "-s -w" \
+-output "bin/{{.Dir}}_{{.OS}}_{{.Arch}}" \
+github.com/deptofdefense/iceberg/cmd/iceberg
 
 # final stage
 FROM gcr.io/distroless/base:latest

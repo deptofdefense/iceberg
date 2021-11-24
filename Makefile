@@ -107,7 +107,7 @@ serve_example_ocsp: bin/iceberg temp/ca.crt temp/server.crt  ## Serve using loca
 # Docker
 #
 
-docker_build: bin/iceberg_linux_amd64 ## Build docker server image
+docker_build: ## Build docker server image
 	docker build -f Dockerfile --tag iceberg:latest .
 
 docker_serve_example: temp/ca.crt temp/server.crt ## Serve using docker server image
