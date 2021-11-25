@@ -15,7 +15,10 @@ RUN rm -f bin/gox bin/iceberg_linux_amd64 && make bin/gox && bin/gox \
 github.com/deptofdefense/iceberg/cmd/iceberg
 
 # final stage
-FROM gcr.io/distroless/base:latest
+FROM alpine:3.15
+
+RUN apk update && apk add --no-cache ca-certificates && update-ca-certificates
+
 COPY --from=builder /src/bin/iceberg_linux_amd64 /bin/iceberg
 ENTRYPOINT ["/bin/iceberg"]
 CMD ["--help"]

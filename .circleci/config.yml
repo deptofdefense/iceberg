@@ -92,6 +92,7 @@ jobs:
       - setup_remote_docker:
           docker_layer_caching: false
       - run: make docker_build
+      - run: make docker_version
 
   # `verify_linux` verifys the linux build
   verify_linux:

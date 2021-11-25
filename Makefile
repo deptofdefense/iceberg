@@ -110,6 +110,9 @@ serve_example_ocsp: bin/iceberg temp/ca.crt temp/server.crt  ## Serve using loca
 docker_build: ## Build docker server image
 	docker build -f Dockerfile --tag iceberg:latest .
 
+docker_help: ## Run the help command using docker server image
+	docker run -it --rm iceberg:latest help
+
 docker_serve_example: temp/ca.crt temp/server.crt ## Serve using docker server image
 	docker run -it --rm -p 8080:8080 -v $(PWD):/iceberg iceberg:latest serve \
 	--addr :8080 \
@@ -121,6 +124,8 @@ docker_serve_example: temp/ca.crt temp/server.crt ## Serve using docker server i
 	--template /iceberg/examples/conf/template.html \
 	--access-policy /iceberg/examples/conf/example.json
 
+docker_version:  ## Run the version command using docker server image
+	docker run -it --rm iceberg:latest version
 #
 # Certificate Targets
 #
