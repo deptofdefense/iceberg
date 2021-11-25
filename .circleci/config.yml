@@ -84,6 +84,16 @@ jobs:
             - iceberg_windows_386.exe
             - iceberg_windows_amd64.exe
 
+  # `build_docker` builds the docker container.
+  build_docker:
+    executor: main
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: false
+      - run: make docker_build
+      - run: make docker_version
+
   # `verify_linux` verifys the linux build
   verify_linux:
     executor: base
@@ -117,6 +127,7 @@ workflows:
       - test_go
       - test_cli
       - build
+      - build_docker
       - verify_linux:
           requires:
             - build
