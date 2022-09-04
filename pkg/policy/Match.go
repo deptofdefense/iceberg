@@ -14,7 +14,7 @@ import (
 // Match checks that the value matches the given pattern with support for wildcard expressions.
 // The wildcard character is "*".
 // The wildcard character can only be used once in a pattern.
-// If the pattern equals the wildcard chracter, then the function always returns true.
+// If the pattern equals the wildcard character, then the function always returns true.
 // If the pattern ends with the wild card character, e.g., a/b/*, then it matches the prefix of the value.
 // If the pattern starts with the wild card character, e.g., *.ext, then it matches the suffix of the value.
 // If no wildcard is present, then it checks if the pattern equals the value.
